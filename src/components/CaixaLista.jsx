@@ -29,6 +29,20 @@ export function ChipEtiqueta({ e }) {
   return <span className={`etq cor-${e.cor}`}>{e.nome}</span>;
 }
 
+// Aviso do navegador para mensagem nova de cliente (quando o sistema está em outra aba ou minimizado).
+function BotaoAviso() {
+  const suporta = typeof Notification !== 'undefined';
+  const [estado, setEstado] = useState(suporta ? Notification.permission : 'denied');
+  if (!suporta) return null;
+  if (estado === 'granted') return <span className="mini botao-aviso" title="O navegador avisa quando chega mensagem nova de cliente e o sistema não está na tela"><i className="ti ti-bell-ringing" aria-hidden="true" /> Avisos ligados</span>;
+  if (estado === 'denied') return <span className="mini botao-aviso" title="Os avisos foram bloqueados neste navegador. Libere no cadeado da barra de endereço."><i className="ti ti-bell-off" aria-hidden="true" /> Avisos bloqueados</span>;
+  return (
+    <button type="button" className="link-botao botao-aviso" style={{ margin: 0 }} onClick={() => Notification.requestPermission().then(setEstado)}>
+      <i className="ti ti-bell" aria-hidden="true" />Avisar mensagem nova
+    </button>
+  );
+}
+
 export default function CaixaLista({ itens, carregando, erro, recarregar, aberto, aoAbrir, eu, etiquetas }) {
   const [f, setF] = useState(lerFiltros);
   const [busca, setBusca] = useState('');
@@ -66,6 +80,7 @@ export default function CaixaLista({ itens, carregando, erro, recarregar, aberto
             {etiquetas.map((e) => <option key={e.id} value={String(e.id)}>{e.nome}</option>)}
           </select>
         </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}><BotaoAviso /></div>
         <div className="periodos filtros-caixa" role="group" aria-label="Mostrar">
           {FILTROS.map((x) => (
             <button key={x.id} type="button" aria-pressed={f.filtro === x.id} title={x.dica} onClick={() => setF({ ...f, filtro: x.id })}>

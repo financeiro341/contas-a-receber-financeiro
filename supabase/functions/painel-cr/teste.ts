@@ -5,6 +5,7 @@ let evoStatus = 201;
 let senhaEmDia = true;
 let limiteContato = 99;
 let evoDemora = false;
+const marcadas: any[] = [];
 let perfil = { first_name: "Maria", last_name: "Clara", role: "financeiro", sector: "financeiro" };
 const db: any = { envios: [], notas: [], eventos_caixa: [], atendentes: [{ usuario_id: "u-maria", nome: "Maria Clara", assinatura: "Maria Clara - Dep. Financeiro", pode_enviar: true }] };
 let servidor: any;
@@ -31,8 +32,22 @@ globalThis.fetch = async (input: any, init: any = {}) => {
   if (url.includes("/rest/v1/envios") && metodo === "POST") { const e = { id: db.envios.length + 1, ...JSON.parse(init.body) }; db.envios.push(e); return resp([e], 201); }
   if (url.includes("/rest/v1/envios?id=eq") && metodo === "PATCH") { Object.assign(db.envios[db.envios.length - 1], JSON.parse(init.body)); return resp([]); }
   if (url.includes("/rest/v1/eventos_caixa")) { db.eventos_caixa.push(JSON.parse(init.body)); return resp([{ id: 1 }], 201); }
-  if (url.includes("/rest/v1/mensagens") && metodo === "POST") { db.mensagens = [...(db.mensagens || []), JSON.parse(init.body)]; return new Response(null, { status: 201 }); }
+  if (url.includes("/rest/v1/mensagens") && !url.includes("select=id") && metodo === "POST") { db.mensagens = [...(db.mensagens || []), JSON.parse(init.body)]; return new Response(null, { status: 201 }); }
   if (url.includes("/rest/v1/notas") && metodo === "POST") { const n = { id: 7, ...JSON.parse(init.body) }; db.notas.push(n); return resp([n], 201); }
+  if (url.includes("/chat/findMessages/")) {
+    const b = JSON.parse(init.body);
+    if (b.page > 1) return resp({ messages: { total: 2, pages: 1, currentPage: b.page, records: [] } });
+    return resp({ messages: { total: 2, pages: 1, currentPage: 1, records: [
+      { key: { id: "H1", fromMe: false, remoteJid: b.where.key.remoteJid }, messageType: "conversation", message: { conversation: "Bom dia, paguei ontem" }, messageTimestamp: 1790000000, source: "android", MessageUpdate: [{ status: "READ" }] },
+      { key: { id: "H2", fromMe: true, remoteJid: b.where.key.remoteJid }, messageType: "documentMessage", message: { documentMessage: { fileName: "BOLETO.pdf" } }, messageTimestamp: 1790000100, source: "web" },
+      { key: { id: "H3", fromMe: true, remoteJid: b.where.key.remoteJid }, messageType: "protocolMessage", message: {}, messageTimestamp: 1790000200 },
+    ] } });
+  }
+  if (url.includes("/chat/markMessageAsRead/")) { marcadas.push(JSON.parse(init.body)); return resp({ message: "Read messages", read: "success" }, 201); }
+  if (url.includes("/rest/v1/mensagens?select=id,remote_jid")) return resp([{ id: "U1", remote_jid: "556281437001@s.whatsapp.net" }]);
+  if (url.includes("/rest/v1/mensagens?id=in.") && metodo === "PATCH") { db.lidas = url; return new Response(null, { status: 204 }); }
+  if (url.includes("/rest/v1/mensagens?on_conflict=id&select=id")) { const l = JSON.parse(init.body); db.historico = l; return resp(l.map((x: any) => ({ id: x.id })), 201); }
+  if (url.includes("/rest/v1/respostas_prontas") && metodo === "POST") return resp([{ id: 5 }], 201);
   if (url.includes("api-evolution.iapessoas.com.br") && evoDemora) { const e = new Error("abortado"); e.name = "AbortError"; throw e; }
   if (url.includes("api-evolution.iapessoas.com.br")) return evoStatus < 300 ? resp({ key: { id: "MSG123", fromMe: true }, status: "PENDING" }, evoStatus) : resp({ status: 400, response: { message: [{ exists: false, number: "x" }] } }, evoStatus);
   return resp({ desconhecido: url }, 599);
@@ -84,12 +99,21 @@ limiteContato = 99;
 [s, b] = await post({ acao: "enviar_texto", contato: 1e21, texto: "oi" });
 ok(s === 400, "id enorme recusado");
 
+[s, b] = await post({ acao: "buscar_historico", contato: 94 });
+ok(s === 200 && b.novas === 2 && db.historico.length === 2 && db.historico[1].nome_arquivo === "BOLETO.pdf" && db.historico[0].status === "READ" && db.historico[0].enviada_em.startsWith("2026-09"), "histórico antigo trazido " + JSON.stringify(b));
+[s, b] = await post({ acao: "marcar_lida", contato: 94 });
+ok(s === 200 && b.marcadas === 1 && marcadas[0].readMessages[0].id === "U1" && marcadas[0].readMessages[0].fromMe === false && db.lidas.includes('"U1"'), "marcar como lida " + JSON.stringify(b));
+[s, b] = await post({ acao: "resposta_criar", titulo: "Teste", texto: "Olá {nome}" });
+ok(s === 200 && b.id === 5, "resposta pronta criada");
 [s, b] = await post({ acao: "nota", contato: 94, texto: "Prometeu pagar sexta" });
 ok(s === 200 && db.notas[0].usuario_nome === "Maria Clara", "nota gravada");
 
 perfil = { first_name: "Olavio", last_name: "Santos", role: "financeiro", sector: "financeiro" };
 const r2 = await fetch("http://fn/", { method: "POST", headers: { Authorization: "Bearer outro", "Content-Type": "application/json" }, body: JSON.stringify({ acao: "enviar_texto", contato: 94, texto: "oi" }) });
 ok(r2.status === 403, "Olavio não envia " + r2.status);
+const r2b = await fetch("http://fn/", { method: "POST", headers: { Authorization: "Bearer outro", "Content-Type": "application/json" }, body: JSON.stringify({ acao: "marcar_lida", contato: 94 }) });
+const j2b = await r2b.json();
+ok(r2b.status === 200 && j2b.marcadas === 0 && marcadas.length === 1, "Olavio abre a conversa sem marcar como lida");
 const r3 = await fetch("http://fn/?acao=eu", { headers: { Authorization: "Bearer outro" } });
 const eu = await r3.json();
 ok(eu.usuario.pode_enviar === false && eu.usuario.envio_ligado === true, "eu do Olavio");

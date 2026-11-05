@@ -1,16 +1,16 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { enviarArquivo, enviarTexto, lerConversaCompleta } from '../lib/api.js';
+import { buscarHistorico, enviarArquivo, enviarTexto, lerConversaCompleta, marcarLida } from '../lib/api.js';
 import { NOME_SITUACAO } from '../constants.js';
 import { diaDe, horaDe, rotuloDia, tamanhoArquivo } from '../utils/formato.js';
 import { Estado, Vazio, useDados } from './comum.jsx';
 import { Iniciais } from './CaixaLista.jsx';
 import CaixaDetalhes from './CaixaDetalhes.jsx';
+import RespostasProntas, { preencher } from './RespostasProntas.jsx';
 
 const ICONE_ARQUIVO = { documentMessage: 'ti-file-text', imageMessage: 'ti-photo', audioMessage: 'ti-microphone', videoMessage: 'ti-video', stickerMessage: 'ti-mood-smile' };
 const ACEITOS = '.pdf,.jpg,.jpeg,.png,.xlsx,.xls,.docx,.doc,.csv,.txt,.zip';
 const MIME_POR_EXTENSAO = { pdf: 'application/pdf', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', xls: 'application/vnd.ms-excel', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', doc: 'application/msword', csv: 'text/csv', txt: 'text/plain', zip: 'application/zip' };
 const MAX_ARQUIVO = 8 * 1024 * 1024;
-const INICIO_HISTORICO = '2026-11-01';
 
 // Negrito do WhatsApp (*texto*) sem montar HTML: o React escapa o resto.
 function TextoWhats({ texto }) {
@@ -30,7 +30,7 @@ const chaveRascunho = (eu, contato) => `cr:rascunho:${eu?.id || 'x'}:${contato}`
 function lerRascunho(chave) { try { return sessionStorage.getItem(chave) || ''; } catch { return ''; } }
 function guardarRascunho(chave, t) { try { if (t) sessionStorage.setItem(chave, t); else sessionStorage.removeItem(chave); } catch { /* sem armazenamento */ } }
 
-export default function CaixaConversa({ contato, eu, etiquetas, equipe, aoVoltar, aoMudar, recarregarEtiquetas }) {
+export default function CaixaConversa({ contato, eu, etiquetas, equipe, aoVoltar, aoMudar, recarregarEtiquetas, respostas, recarregarRespostas }) {
   const conv = useDados(() => lerConversaCompleta(contato), [contato], 5000);
   const [saindo, setSaindo] = useState([]); // mensagens que estão saindo agora (aparecem na hora)
   const d = conv.dados;
@@ -46,9 +46,12 @@ export default function CaixaConversa({ contato, eu, etiquetas, equipe, aoVoltar
   const [aviso, setAviso] = useState(null);
   const corpo = useRef(null);
   const noFim = useRef(true);
-  const qtdAntes = useRef(0);
   const campo = useRef(null);
   const anexo = useRef(null);
+  const ultimaVista = useRef(null);
+  const marcadas = useRef('');
+  const [painelRespostas, setPainelRespostas] = useState(null); // null fechado; string = filtro
+  const [historico, setHistorico] = useState(null); // null, 'lendo' ou { novas }
 
   useEffect(() => { guardarRascunho(rascunho, texto); }, [rascunho, texto]);
   useEffect(() => { if (window.innerWidth > 1280) { try { localStorage.setItem('cr:detalhes', detalhes ? 's' : 'n'); } catch { /* sem armazenamento */ } } }, [detalhes]);
@@ -60,10 +63,56 @@ export default function CaixaConversa({ contato, eu, etiquetas, equipe, aoVoltar
   useLayoutEffect(() => {
     const el = corpo.current;
     if (!el || !d) return;
-    const novas = (d.mensagens || []).length !== qtdAntes.current;
-    qtdAntes.current = (d.mensagens || []).length;
+    const ultima = (d.mensagens || []).at(-1)?.id || null;
+    const novas = ultima !== ultimaVista.current;
+    ultimaVista.current = ultima;
     if (novas && noFim.current) el.scrollTop = el.scrollHeight;
   }, [d]);
+
+  // Quem responde, ao abrir a conversa (com a aba visível), marca como lidas no WhatsApp as mensagens do cliente.
+  useEffect(() => {
+    if (!d || !eu?.pode_enviar || !eu?.envio_ligado || document.visibilityState !== 'visible') return;
+    const naoLidas = (d.mensagens || []).filter((m) => !m.nos && m.status && !['READ', 'PLAYED'].includes(m.status)).map((m) => m.id).join(',');
+    if (!naoLidas || naoLidas === marcadas.current) return;
+    marcadas.current = naoLidas;
+    marcarLida(contato).then((r) => { if (r?.marcadas) { conv.atualizar(); aoMudar?.(); } }).catch(() => { marcadas.current = ''; });
+  }, [d]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function trazerHistorico() {
+    setHistorico('lendo');
+    setAviso(null);
+    try {
+      const r = await buscarHistorico(contato);
+      setHistorico({ novas: r.novas });
+      if (r.novas) {
+        const el = corpo.current;
+        const alturaAntes = el?.scrollHeight || 0;
+        const primeira = mensagens[0]?.em;
+        const ant = await lerConversaCompleta(contato, primeira);
+        setAnteriores((a) => [...(ant.mensagens || []), ...a]);
+        setMaisAntigas(!!ant.mais_antigas);
+        requestAnimationFrame(() => { if (el) el.scrollTop = el.scrollHeight - alturaAntes; });
+      }
+    } catch (e) {
+      setHistorico(null);
+      setAviso(e.message);
+    }
+  }
+
+  function escolherResposta(modelo) {
+    const t = preencher(modelo, d?.contato, d?.empresas);
+    setTexto((atual) => (/^\/\S*$/.test(atual.trim()) || !atual.trim() ? t : `${atual.trimEnd()} ${t}`));
+    setPainelRespostas(null);
+    requestAnimationFrame(() => campo.current?.focus());
+  }
+
+  function mudarTexto(valor) {
+    setTexto(valor);
+    // "/" no começo abre as respostas prontas, filtrando pelo que vem depois.
+    const m = valor.match(/^\/(\S*)$/);
+    if (m && respostas?.length) setPainelRespostas(m[1]);
+    else if (painelRespostas !== null && !valor.startsWith('/')) setPainelRespostas(null);
+  }
 
   function aoRolar() {
     const el = corpo.current;
@@ -137,6 +186,13 @@ export default function CaixaConversa({ contato, eu, etiquetas, equipe, aoVoltar
   }
 
   function teclas(ev) {
+    if (painelRespostas !== null && ev.key === 'Enter' && !ev.shiftKey) {
+      // Com "/algo" digitado, Enter usa a primeira resposta pronta da lista.
+      const q = painelRespostas.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      const r = (respostas || []).find((x) => !q || x.titulo.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes(q));
+      if (r) { ev.preventDefault(); escolherResposta(r.texto); return; }
+    }
+    if (ev.key === 'Escape' && painelRespostas !== null) { setPainelRespostas(null); return; }
     const toque = window.matchMedia?.('(pointer: coarse)').matches;
     if (ev.key === 'Enter' && !ev.shiftKey && !toque && !ev.nativeEvent.isComposing) {
       ev.preventDefault();
@@ -175,8 +231,15 @@ export default function CaixaConversa({ contato, eu, etiquetas, equipe, aoVoltar
               <>
                 {mais ? (
                   <div className="antigas"><button type="button" className="botao" onClick={verAntigas} disabled={lendoAntigas}>{lendoAntigas ? 'Lendo…' : 'Ver mensagens anteriores'}</button></div>
+                ) : historico?.novas === 0 ? (
+                  <p className="inicio-historico">Não há mensagens mais antigas no WhatsApp para este contato.</p>
                 ) : (
-                  <p className="inicio-historico">Mensagens guardadas desde {INICIO_HISTORICO.split('-').reverse().join('/')}{c?.situacao !== 'cliente' ? ' (alguns contatos têm desde agosto)' : ''}.</p>
+                  <div className="antigas">
+                    <button type="button" className="botao" onClick={trazerHistorico} disabled={historico === 'lendo'}>
+                      <i className={`ti ${historico === 'lendo' ? 'ti-loader-2 girando' : 'ti-history'}`} aria-hidden="true" />
+                      {historico === 'lendo' ? 'Buscando no WhatsApp…' : 'Buscar mensagens anteriores no WhatsApp'}
+                    </button>
+                  </div>
                 )}
                 {mensagens.length === 0 && <Vazio icone="ti-message-off" titulo="Nenhuma mensagem guardada" />}
                 {mensagens.map((m) => {
@@ -235,16 +298,21 @@ export default function CaixaConversa({ contato, eu, etiquetas, equipe, aoVoltar
                   <button type="button" className="limpar" onClick={() => setArquivo(null)} aria-label="Tirar o arquivo"><i className="ti ti-x" aria-hidden="true" /></button>
                 </div>
               )}
+              {painelRespostas !== null && (
+                <RespostasProntas filtro={painelRespostas} respostas={respostas || []} eu={eu} aoEscolher={escolherResposta}
+                  aoFechar={() => setPainelRespostas(null)} recarregar={recarregarRespostas} />
+              )}
               <div className="linha-compor">
                 <input ref={anexo} type="file" accept={ACEITOS} onChange={escolherArquivo} hidden />
                 <button type="button" className="botao icone" onClick={() => anexo.current?.click()} aria-label="Anexar arquivo" title="Anexar arquivo (até 8 MB)" disabled={!podeResponder || enviando}><i className="ti ti-paperclip" aria-hidden="true" /></button>
+                <button type="button" className="botao icone botao-respostas" onClick={() => setPainelRespostas(painelRespostas === null ? '' : null)} aria-label="Respostas prontas" aria-expanded={painelRespostas !== null} title="Respostas prontas (ou digite / no começo)" disabled={!podeResponder || enviando}><i className="ti ti-bolt" aria-hidden="true" /></button>
                 <label className="so-leitor" htmlFor={`msg-${contato}`}>Mensagem</label>
                 <textarea
                   id={`msg-${contato}`}
                   ref={campo}
                   rows={1}
                   value={texto}
-                  onChange={(e) => setTexto(e.target.value)}
+                  onChange={(e) => mudarTexto(e.target.value)}
                   onKeyDown={teclas}
                   maxLength={arquivo ? 1000 : 4000}
                   placeholder={arquivo ? 'Legenda (opcional)' : 'Escreva a mensagem'}
@@ -254,7 +322,7 @@ export default function CaixaConversa({ contato, eu, etiquetas, equipe, aoVoltar
                   <i className={`ti ${enviando ? 'ti-loader-2 girando' : 'ti-send'}`} aria-hidden="true" /><span className="rotulo-enviar">{enviando ? 'Enviando' : 'Enviar'}</span>
                 </button>
               </div>
-              <p className="assinatura">Sai com a assinatura <b>{eu.assinatura}</b>. Enter envia, Shift+Enter quebra a linha.</p>
+              <p className="assinatura">Sai com a assinatura <b>{eu.assinatura}</b>. Enter envia, Shift+Enter quebra a linha, / abre as respostas prontas.</p>
             </>
           )}
         </div>

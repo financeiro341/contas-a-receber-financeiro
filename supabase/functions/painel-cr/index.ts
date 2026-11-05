@@ -213,6 +213,96 @@ async function chamarEvolution(rota: string, corpo: Record<string, unknown>) {
   }
 }
 
+// Chamada à Evolution para leitura e marcação (rotas de chat). Devolve o JSON ou lança Erro 502.
+async function evolutionChat(rota: string, corpo: Record<string, unknown>) {
+  if (!EVO_CHAVE) throw new Erro(503, "A ligação com o WhatsApp ainda não foi configurada.");
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), 25_000);
+  try {
+    const r = await fetch(`${EVOLUTION_URL}/chat/${rota}/${encodeURIComponent(INSTANCIA)}`, {
+      method: "POST", headers: { apikey: EVO_CHAVE, "Content-Type": "application/json" }, body: JSON.stringify(corpo), signal: ctl.signal,
+    });
+    const texto = await r.text();
+    if (!r.ok) { console.error(`evolution ${rota}: ${r.status} ${texto.slice(0, 300)}`); throw new Erro(502, "O WhatsApp não respondeu como esperado. Tente de novo em instantes."); }
+    return texto ? JSON.parse(texto) : null;
+  } catch (e) {
+    if (e instanceof Erro) throw e;
+    console.error(`evolution ${rota}: ${(e as Error).message}`);
+    throw new Erro(502, "O WhatsApp não respondeu. Tente de novo em instantes.");
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+// Mesma leitura de texto e arquivo da função receber-evolution.
+function textoDa(m: any): string | null {
+  if (!m) return null;
+  return m.conversation ?? m.extendedTextMessage?.text ?? m.imageMessage?.caption ?? m.videoMessage?.caption ??
+    m.documentMessage?.caption ?? m.documentWithCaptionMessage?.message?.documentMessage?.caption ??
+    m.buttonsResponseMessage?.selectedDisplayText ?? m.listResponseMessage?.title ??
+    m.templateButtonReplyMessage?.selectedDisplayText ?? m.reactionMessage?.text ?? null;
+}
+function arquivoDa(m: any): string | null {
+  return m?.documentMessage?.fileName ?? m?.documentWithCaptionMessage?.message?.documentMessage?.fileName ?? null;
+}
+function segundos(ts: unknown): number {
+  if (typeof ts === "number") return ts;
+  if (typeof ts === "string") return Number(ts);
+  if (ts && typeof ts === "object" && "low" in (ts as any)) return Number((ts as any).low);
+  return NaN;
+}
+
+// Traz do WhatsApp (banco da Evolution) as mensagens antigas de uma conversa que ainda não estão guardadas.
+async function buscarHistorico(contato: number) {
+  const c = (await rest(`contatos?select=id,jid,lid&id=eq.${contato}`))[0];
+  if (!c) throw new Erro(404, "Contato não encontrado.");
+  const jids = [c.jid, c.lid].filter((j: string | null) => j && !String(j).endsWith("@g.us")) as string[];
+  if (!jids.length) throw new Erro(400, "Este contato não tem número no WhatsApp.");
+  const linhas: Record<string, unknown>[] = [];
+  for (const remoteJid of jids) {
+    for (let page = 1; page <= 10; page++) {
+      const r = await evolutionChat("findMessages", { where: { key: { remoteJid } }, page, offset: 100 });
+      const bloco = r?.messages ?? r;
+      const registros: any[] = Array.isArray(bloco) ? bloco : (bloco?.records ?? []);
+      for (const x of registros) {
+        const k = x?.key ?? {};
+        if (!k.id || x?.messageType === "protocolMessage") continue;
+        const ts = segundos(x.messageTimestamp);
+        if (!Number.isFinite(ts) || ts <= 0) continue;
+        const atualizacoes: any[] = Array.isArray(x.MessageUpdate) ? x.MessageUpdate : [];
+        const ultimo = atualizacoes.length ? atualizacoes[atualizacoes.length - 1]?.status : null;
+        const texto = textoDa(x.message);
+        linhas.push({
+          id: k.id, contato_id: contato, remote_jid: k.remoteJid ?? remoteJid, remote_jid_alt: k.remoteJidAlt ?? null, grupo: false,
+          de_nos: !!k.fromMe, tipo: x.messageType ?? null, texto: texto ? String(texto).slice(0, 4000) : null, nome_arquivo: arquivoDa(x.message),
+          aparelho: x.source ?? null, enviada_em: new Date(ts * 1000).toISOString(), status: ultimo ? String(ultimo) : null,
+        });
+      }
+      const paginas = Number(bloco?.pages ?? 0);
+      if (!registros.length || (paginas && page >= paginas)) break;
+    }
+  }
+  let novas = 0;
+  for (let i = 0; i < linhas.length; i += 200) {
+    const r = await rest("mensagens?on_conflict=id&select=id", {
+      method: "POST", headers: { Prefer: "resolution=ignore-duplicates,return=representation" }, body: JSON.stringify(linhas.slice(i, i + 200)),
+    });
+    novas += Array.isArray(r) ? r.length : 0;
+  }
+  return { ok: true, lidas: linhas.length, novas };
+}
+
+// Marca como lidas no WhatsApp as mensagens do cliente ainda não abertas (como o WhatsApp Web ao abrir a conversa).
+async function marcarLida(contato: number) {
+  const desde = new Date(Date.now() - 7 * 86400_000).toISOString();
+  const pend = await rest(`mensagens?select=id,remote_jid&contato_id=eq.${contato}&de_nos=is.false&grupo=is.false&status=not.is.null&status=not.in.(READ,PLAYED)&enviada_em=gte.${encodeURIComponent(desde)}&order=enviada_em.desc&limit=50`);
+  if (!pend.length) return { ok: true, marcadas: 0 };
+  await evolutionChat("markMessageAsRead", { readMessages: pend.map((m: any) => ({ remoteJid: m.remote_jid, fromMe: false, id: m.id })) });
+  const ids = pend.map((m: any) => `"${String(m.id).replace(/"/g, "")}"`).join(",");
+  await rest(`mensagens?id=in.(${ids})`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ status: "READ" }) });
+  return { ok: true, marcadas: pend.length };
+}
+
 async function registrarEnvio(u: Usuario, contato: number, alvo: { destino: string; jid: string }, dados: Record<string, any>, rota: string, corpo: Record<string, unknown>, gravado: { tipo: string; texto: string | null }) {
   const destino = alvo.destino;
   if (!EVO_CHAVE) throw new Erro(503, "O envio ainda não foi ligado: falta configurar a chave da Evolution na função.");
@@ -356,6 +446,33 @@ async function tratarPost(u: Usuario, corpo: any) {
       await evento(contato, u, "dono", { para: pessoa.nome });
       return { ok: true };
     }
+    case "buscar_historico": {
+      const contato = inteiro(corpo.contato, "Contato");
+      const r = await buscarHistorico(contato);
+      if (r.novas) await evento(contato, u, "historico", { novas: r.novas });
+      return r;
+    }
+    case "marcar_lida": {
+      if (!u.podeEnviar) return { ok: true, marcadas: 0 }; // quem só lê não marca nada no WhatsApp
+      return await marcarLida(inteiro(corpo.contato, "Contato"));
+    }
+    case "resposta_criar": {
+      if (!u.podeEnviar) throw new Erro(403, "Só quem responde pelo sistema cria respostas prontas.");
+      const titulo = String(corpo.titulo ?? "").trim().replace(/\s+/g, " ");
+      const texto = String(corpo.texto ?? "").replace(/\r\n/g, "\n").trim();
+      if (!titulo || titulo.length > 60) throw new Erro(400, "O título precisa ter de 1 a 60 caracteres.");
+      if (!texto || texto.length > 4000) throw new Erro(400, "O texto precisa ter de 1 a 4.000 caracteres.");
+      const [r] = await rest("respostas_prontas", { method: "POST", body: JSON.stringify({ titulo, texto, criada_por: u.id, criada_por_nome: u.nome }) });
+      return { ok: true, id: r.id };
+    }
+    case "resposta_apagar": {
+      const id = inteiro(corpo.id, "Resposta");
+      const r = (await rest(`respostas_prontas?select=id,criada_por,apagada_em&id=eq.${id}`))[0];
+      if (!r || r.apagada_em) throw new Erro(404, "Resposta não encontrada.");
+      if (r.criada_por !== u.id && u.papel !== "admin") throw new Erro(403, "Só quem criou ou um administrador apaga a resposta.");
+      await rest(`respostas_prontas?id=eq.${id}`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ apagada_em: new Date().toISOString() }) });
+      return { ok: true };
+    }
     default:
       throw new Erro(400, "Ação desconhecida.");
   }
@@ -416,6 +533,8 @@ Deno.serve(async (req) => {
         return json(await rest("etiquetas?select=id,nome,cor&apagada_em=is.null&order=nome"), 200, h);
       case "equipe":
         return json(await equipe(usuario), 200, h);
+      case "respostas":
+        return json(await rest("respostas_prontas?select=id,titulo,texto,criada_por,criada_por_nome&apagada_em=is.null&order=titulo"), 200, h);
       default:
         return json({ erro: "Ação desconhecida." }, 400, h);
     }

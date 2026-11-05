@@ -101,3 +101,8 @@ export const apagarNota = (id) => postar({ acao: 'nota_apagar', id });
 export const marcarEtiqueta = (contato, etiqueta, ligar) => postar({ acao: 'etiqueta', contato, etiqueta, ligar });
 export const criarEtiqueta = (nome, cor) => postar({ acao: 'etiqueta_criar', nome, cor });
 export const definirDono = (contato, usuario) => postar({ acao: 'atribuir', contato, usuario });
+export const buscarHistorico = (contato) => postar({ acao: 'buscar_historico', contato });
+export const marcarLida = (contato) => postar({ acao: 'marcar_lida', contato });
+export const lerRespostas = () => ler({ acao: 'respostas' });
+export const criarResposta = (titulo, texto) => postar({ acao: 'resposta_criar', titulo, texto });
+export const apagarResposta = (id) => postar({ acao: 'resposta_apagar', id });

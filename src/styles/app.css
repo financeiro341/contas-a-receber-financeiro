@@ -345,3 +345,25 @@ main.main-caixa { padding-top: 12px; padding-bottom: 12px; }
   .rotulo-enviar { display: none; }
   .assinatura { display: none; }
 }
+
+/* Respostas prontas e avisos */
+.compositor { position: relative; }
+.respostas { position: absolute; left: 14px; right: 14px; bottom: calc(100% - 4px); z-index: 6; max-height: min(380px, 55vh); display: flex; flex-direction: column;
+  background: var(--bg-overlay); border: 1px solid var(--border-strong); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); overflow: hidden; }
+.respostas-topo { display: flex; gap: 8px; align-items: center; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+.respostas-topo .ti-bolt { color: var(--accent-text); }
+.respostas-topo input { flex: 1; min-width: 0; border: 0; background: transparent; min-height: 36px; color: var(--text-primary); }
+.respostas-topo input:focus-visible { outline: none; }
+.respostas-lista { list-style: none; margin: 0; padding: 4px 0; overflow-y: auto; flex: 1; }
+.respostas-lista li { display: flex; align-items: center; gap: 4px; padding-right: 8px; }
+.resposta-item { all: unset; box-sizing: border-box; flex: 1; min-width: 0; cursor: pointer; padding: 8px 12px; display: flex; flex-direction: column; gap: 2px; }
+.resposta-item b { color: var(--text-primary); font-size: 13.5px; }
+.resposta-item span { font-size: 12.5px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.resposta-item.ativo, .resposta-item:hover { background: var(--bg-subtle); }
+.resposta-item:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: -3px; }
+.respostas .confirma { display: inline-flex; gap: 6px; }
+.respostas .confirma .link-botao { margin: 0; font-size: 12.5px; }
+.nova-resposta { display: flex; flex-direction: column; gap: 6px; padding: 10px; }
+.nova-resposta input, .nova-resposta textarea { border: 1px solid var(--border-campo); border-radius: var(--radius-md); padding: 8px 10px; background: var(--bg-elevated); color: var(--text-primary); }
+.linha-botoes { display: flex; gap: 6px; }
+.botao-aviso { white-space: nowrap; }

@@ -42,9 +42,29 @@ function ContagemEspera() {
 }
 
 // Na aba Conversas: quantas conversas de clientes têm mensagem sem ler (últimos 30 dias).
-function ContagemSemLer() {
-  const { dados } = useDados(() => lerCaixa(30), [], 60000);
-  const n = (dados || []).filter((c) => c.situacao === 'cliente' && c.sem_ler > 0).length;
+// Com a aba do navegador em segundo plano e o aviso permitido, avisa a mensagem nova de cliente.
+function ContagemSemLer({ aoContar, aoAbrir }) {
+  const { dados } = useDados(() => lerCaixa(30), [], 30000);
+  const antes = useRef(null);
+  const lista = (dados || []).filter((c) => c.situacao === 'cliente' && c.sem_ler > 0);
+  const n = lista.length;
+  useEffect(() => { aoContar?.(n); }, [n, aoContar]);
+  useEffect(() => {
+    if (!dados) return;
+    const agora = new Map(lista.map((c) => [c.contato_id, c.ultima_em]));
+    if (antes.current && document.visibilityState !== 'visible' && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+      const novas = lista.filter((c) => !c.ultima_de_nos && antes.current.get(c.contato_id) !== c.ultima_em);
+      if (novas.length) {
+        try {
+          const aviso = new Notification(novas.length > 1 ? `${novas.length} mensagens novas de clientes` : `Mensagem nova de ${novas[0].nome}`, {
+            body: novas.length > 1 ? novas.map((c) => c.nome).slice(0, 4).join(', ') : (novas[0].ultima_texto || ''), tag: 'cr-caixa', icon: '/favicon.svg',
+          });
+          aviso.onclick = () => { window.focus(); aoAbrir?.(novas[0].contato_id); aviso.close(); };
+        } catch { /* navegador sem aviso */ }
+      }
+    }
+    antes.current = agora;
+  }, [dados]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!n) return null;
   return <span className="contador" aria-label={`${n} sem ler`}>{n}</span>;
 }
@@ -75,6 +95,7 @@ export default function App() {
   const [dia, setDia] = useState(diaInicial);
   const [conversa, setConversa] = useState(null);
   const [pedidoCaixa, setPedidoCaixa] = useState(null);
+  const [semLer, setSemLer] = useState(0);
   const origem = useRef(null);
   const topo = useRef(null);
 
@@ -95,7 +116,7 @@ export default function App() {
     });
   }, [sessao]);
   useEffect(() => { try { localStorage.setItem('cr:aba', aba); } catch { /* sem armazenamento */ } }, [aba]);
-  useEffect(() => { document.title = `${ABAS.find((a) => a.id === aba)?.nome || ''} · Contas a Receber`; }, [aba]);
+  useEffect(() => { document.title = `${semLer ? `(${semLer}) ` : ''}${ABAS.find((a) => a.id === aba)?.nome || ''} · Contas a Receber`; }, [aba, semLer]);
 
   const abrirConversa = useCallback((contato, d) => {
     origem.current = document.activeElement;
@@ -137,7 +158,7 @@ export default function App() {
               <button key={a.id} role="tab" type="button" aria-selected={aba === a.id} onClick={() => setAba(a.id)}>
                 <i className={`ti ${a.icone}`} aria-hidden="true" /><span className="nome-longo">{a.nome}</span><span className="nome-curto">{a.curto}</span>
                 {a.id === 'atendimento' && <ContagemEspera />}
-                {a.id === 'conversas' && <ContagemSemLer />}
+                {a.id === 'conversas' && <ContagemSemLer aoContar={setSemLer} aoAbrir={abrirNaCaixa} />}
               </button>
             ))}
           </nav>
