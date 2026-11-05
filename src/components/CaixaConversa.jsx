@@ -25,8 +25,10 @@ function Leitura({ status }) {
   return <i className="ti ti-check" aria-label="enviada" title="Enviada" />;
 }
 
-function lerRascunho(contato) { try { return localStorage.getItem(`cr:rascunho:${contato}`) || ''; } catch { return ''; } }
-function guardarRascunho(contato, t) { try { if (t) localStorage.setItem(`cr:rascunho:${contato}`, t); else localStorage.removeItem(`cr:rascunho:${contato}`); } catch { /* sem armazenamento */ } }
+// Rascunho só nesta aba (sessionStorage) e por pessoa; some ao sair ou fechar a aba.
+const chaveRascunho = (eu, contato) => `cr:rascunho:${eu?.id || 'x'}:${contato}`;
+function lerRascunho(chave) { try { return sessionStorage.getItem(chave) || ''; } catch { return ''; } }
+function guardarRascunho(chave, t) { try { if (t) sessionStorage.setItem(chave, t); else sessionStorage.removeItem(chave); } catch { /* sem armazenamento */ } }
 
 export default function CaixaConversa({ contato, eu, etiquetas, equipe, aoVoltar, aoMudar, recarregarEtiquetas }) {
   const conv = useDados(() => lerConversaCompleta(contato), [contato], 10000);
@@ -36,7 +38,8 @@ export default function CaixaConversa({ contato, eu, etiquetas, equipe, aoVoltar
   const [maisAntigas, setMaisAntigas] = useState(null);
   // Detalhes abertos por padrão só em tela larga (no notebook e no celular cobrem a conversa).
   const [detalhes, setDetalhes] = useState(() => { if (window.innerWidth <= 1280) return false; try { return localStorage.getItem('cr:detalhes') !== 'n'; } catch { return true; } });
-  const [texto, setTexto] = useState(() => lerRascunho(contato));
+  const rascunho = chaveRascunho(eu, contato);
+  const [texto, setTexto] = useState(() => lerRascunho(rascunho));
   const [arquivo, setArquivo] = useState(null);
   const [enviando, setEnviando] = useState(false);
   const [aviso, setAviso] = useState(null);
@@ -46,7 +49,7 @@ export default function CaixaConversa({ contato, eu, etiquetas, equipe, aoVoltar
   const campo = useRef(null);
   const anexo = useRef(null);
 
-  useEffect(() => { guardarRascunho(contato, texto); }, [contato, texto]);
+  useEffect(() => { guardarRascunho(rascunho, texto); }, [rascunho, texto]);
   useEffect(() => { if (window.innerWidth > 1280) { try { localStorage.setItem('cr:detalhes', detalhes ? 's' : 'n'); } catch { /* sem armazenamento */ } } }, [detalhes]);
 
   const vistas = new Set();
@@ -189,10 +192,12 @@ export default function CaixaConversa({ contato, eu, etiquetas, equipe, aoVoltar
                   );
                 })}
                 {(d.envios || []).filter((e) => e.status !== 'enviado').map((e) => (
-                  <div key={`e${e.id}`} className={`balao nos pendente${e.status === 'erro' ? ' falhou' : ''}`}>
+                  <div key={`e${e.id}`} className={`balao nos pendente${e.status === 'erro' ? ' falhou' : ''}${e.status === 'incerto' ? ' incerto' : ''}`}>
                     {e.arquivo && <span className="arquivo"><i className="ti ti-paperclip" aria-hidden="true" />{e.arquivo}</span>}
                     {e.texto && <div>{e.texto}</div>}
-                    <span className="hora">{e.status === 'erro' ? <><i className="ti ti-alert-circle" aria-hidden="true" /> Não saiu ({e.por}, {horaDe(e.em)})</> : `Enviando… (${e.por})`}</span>
+                    <span className="hora">{e.status === 'erro' ? <><i className="ti ti-alert-circle" aria-hidden="true" /> Não saiu ({e.por}, {horaDe(e.em)})</>
+                      : e.status === 'incerto' ? <><i className="ti ti-help-circle" aria-hidden="true" /> Pode ter saído: confira acima antes de reenviar ({e.por}, {horaDe(e.em)})</>
+                        : `Enviando… (${e.por})`}</span>
                   </div>
                 ))}
               </>

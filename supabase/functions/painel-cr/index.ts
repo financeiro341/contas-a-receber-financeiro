@@ -13,27 +13,37 @@ const EVOLUTION_URL = "https://api-evolution.iapessoas.com.br";
 const INSTANCIA = "Financeiro CB";
 const EVO_CHAVE = Deno.env.get("EVOLUTION_APIKEY") || "";
 
+// Produção e prévias da Vercel do próprio time; localhost só com PERMITIR_LOCALHOST=1 no segredo da função.
 const ORIGENS = [
-  /^https:\/\/contas-a-receber-financeiro(-[a-z0-9-]+)?\.vercel\.app$/,
-  /^http:\/\/localhost:\d+$/,
-  /^http:\/\/127\.0\.0\.1:\d+$/,
+  /^https:\/\/contas-a-receber-financeiro\.vercel\.app$/,
+  /^https:\/\/contas-a-receber-financeiro-(git-[a-z0-9-]+|[a-z0-9]+)-mariana-1923\.vercel\.app$/,
+  ...(Deno.env.get("PERMITIR_LOCALHOST") === "1" ? [/^http:\/\/localhost:\d+$/, /^http:\/\/127\.0\.0\.1:\d+$/] : []),
 ];
 
 // Arquivos aceitos no envio (boletos, comprovantes, planilhas, imagens). Até 8 MB.
-const TIPOS_ARQUIVO: Record<string, "document" | "image"> = {
-  "application/pdf": "document",
-  "image/jpeg": "image",
-  "image/png": "image",
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "document",
-  "application/vnd.ms-excel": "document",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "document",
-  "application/msword": "document",
-  "text/csv": "document",
-  "text/plain": "document",
-  "application/zip": "document",
+// A extensão do nome precisa ser a do tipo; se não for, a do tipo é acrescentada.
+const TIPOS_ARQUIVO: Record<string, { midia: "document" | "image"; ext: string[] }> = {
+  "application/pdf": { midia: "document", ext: ["pdf"] },
+  "image/jpeg": { midia: "image", ext: ["jpg", "jpeg"] },
+  "image/png": { midia: "image", ext: ["png"] },
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": { midia: "document", ext: ["xlsx"] },
+  "application/vnd.ms-excel": { midia: "document", ext: ["xls"] },
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": { midia: "document", ext: ["docx"] },
+  "application/msword": { midia: "document", ext: ["doc"] },
+  "text/csv": { midia: "document", ext: ["csv"] },
+  "text/plain": { midia: "document", ext: ["txt"] },
+  "application/zip": { midia: "document", ext: ["zip"] },
 };
+function nomeSeguro(bruto: unknown, ext: string[]): string {
+  let nome = String(bruto || "arquivo")
+    .replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, "")
+    .replace(/[\\/:*?"<>|\u0000-\u001f]/g, "_")
+    .trim().slice(0, 120) || "arquivo";
+  const atual = nome.includes(".") ? nome.split(".").pop()!.toLowerCase() : "";
+  if (!ext.includes(atual)) nome = `${nome}.${ext[0]}`;
+  return nome;
+}
 const MAX_ARQUIVO = 8 * 1024 * 1024;
-const MAX_ENVIOS_MINUTO = 20;
 const CORES = ["neutro", "azul", "verde", "amarelo", "vermelho", "roxo"];
 
 function cors(origem: string | null): Record<string, string> {
@@ -79,6 +89,13 @@ async function conferir(token: string): Promise<Usuario | null> {
   if (!p.ok) return null;
   const perfil = (await p.json())[0];
   if (!perfil || !(perfil.role === "admin" || ["financeiro", "diretoria"].includes(perfil.sector))) return null;
+  // Conta com a troca de senha pendente no Painel não entra (o Painel também a limita: senha_em_dia).
+  const sd = await fetch(`${PAINEL_URL}/rest/v1/rpc/senha_em_dia`, {
+    method: "POST",
+    headers: { apikey: PAINEL_CHAVE, Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: "{}",
+  });
+  if (!sd.ok || (await sd.json()) !== true) return null;
   const nome = [perfil.first_name, perfil.last_name].filter(Boolean).join(" ");
   const at = (await rest(`atendentes?select=nome,assinatura,pode_enviar&usuario_id=eq.${encodeURIComponent(u.id)}`))[0];
   const usuario: Usuario = {
@@ -112,7 +129,7 @@ const DATA = /^\d{4}-\d{2}-\d{2}$/;
 
 function inteiro(v: unknown, campo: string): number {
   const n = Number(v);
-  if (!Number.isInteger(n) || n <= 0) throw new Erro(400, `${campo} inválido.`);
+  if (!Number.isSafeInteger(n) || n <= 0) throw new Erro(400, `${campo} inválido.`);
   return n;
 }
 
@@ -128,13 +145,33 @@ async function contatoDestino(id: number): Promise<string> {
   throw new Erro(400, "Este contato não tem número para resposta.");
 }
 
-async function limiteDeEnvio(u: Usuario) {
-  const desde = new Date(Date.now() - 60_000).toISOString();
-  const r = await fetch(`${URL_BASE}/rest/v1/envios?select=id&usuario_id=eq.${u.id}&criado_em=gte.${encodeURIComponent(desde)}`, {
-    headers: { apikey: SERVICO, Authorization: `Bearer ${SERVICO}`, Prefer: "count=exact", Range: "0-0" },
+// Permissão de envio conferida na hora (sem o cache de 60 s), para valer logo quando é tirada.
+async function confirmarQuePodeEnviar(u: Usuario) {
+  if (u.papel === "admin") return;
+  const at = (await rest(`atendentes?select=pode_enviar&usuario_id=eq.${encodeURIComponent(u.id)}`))[0];
+  if (!at?.pode_enviar) throw new Erro(403, "Seu usuário pode ver as conversas, mas não responder.");
+}
+
+const LIMITES: Record<string, string> = {
+  limite_pessoa_minuto: "Muitos envios em pouco tempo. Espere um minuto.",
+  limite_contato_minuto: "Já foram 5 mensagens para este contato no último minuto. Espere um pouco.",
+  limite_pessoa_dia: "Você chegou ao limite de 300 envios hoje.",
+};
+
+// Conta os limites e grava o envio na mesma transação (função registrar_envio, com trava por pessoa).
+async function reservarEnvio(dados: Record<string, unknown>): Promise<number> {
+  const r = await fetch(`${URL_BASE}/rest/v1/rpc/registrar_envio`, {
+    method: "POST",
+    headers: { apikey: SERVICO, Authorization: `Bearer ${SERVICO}`, "Content-Type": "application/json" },
+    body: JSON.stringify(dados),
   });
-  const total = Number((r.headers.get("content-range") || "*/0").split("/")[1] || 0);
-  if (total >= MAX_ENVIOS_MINUTO) throw new Erro(429, "Muitos envios em pouco tempo. Espere um minuto.");
+  const texto = await r.text();
+  if (!r.ok) {
+    const chave = Object.keys(LIMITES).find((k) => texto.includes(k));
+    if (chave) throw new Erro(429, LIMITES[chave]);
+    throw new Error(`registrar_envio: ${r.status} ${texto.slice(0, 200)}`);
+  }
+  return Number(JSON.parse(texto));
 }
 
 async function chamarEvolution(rota: string, corpo: Record<string, unknown>) {
@@ -153,29 +190,37 @@ async function chamarEvolution(rota: string, corpo: Record<string, unknown>) {
     try { dados = JSON.parse(texto); } catch { /* resposta sem JSON */ }
     if (!r.ok) {
       const motivo = JSON.stringify(dados?.response?.message ?? dados?.message ?? texto).slice(0, 300);
-      return { ok: false, erro: `Evolution ${r.status}: ${motivo}` };
+      return { ok: false, incerto: false, erro: `Evolution ${r.status}: ${motivo}` };
     }
-    return { ok: true, id: dados?.key?.id ?? null };
+    return { ok: true, incerto: false, id: dados?.key?.id ?? null };
   } catch (e) {
-    return { ok: false, erro: (e as Error).name === "AbortError" ? "A Evolution não respondeu em 25 segundos." : String((e as Error).message).slice(0, 300) };
+    const demorou = (e as Error).name === "AbortError";
+    return { ok: false, incerto: demorou, erro: demorou ? "A Evolution não respondeu em 25 segundos." : String((e as Error).message).slice(0, 300) };
   } finally {
     clearTimeout(t);
   }
 }
 
-async function registrarEnvio(u: Usuario, contato: number, destino: string, dados: Record<string, unknown>, rota: string, corpo: Record<string, unknown>) {
-  const [envio] = await rest("envios", {
-    method: "POST",
-    body: JSON.stringify({ contato_id: contato, usuario_id: u.id, usuario_nome: u.nome, destino, ...dados }),
+async function registrarEnvio(u: Usuario, contato: number, destino: string, dados: Record<string, any>, rota: string, corpo: Record<string, unknown>) {
+  if (!EVO_CHAVE) throw new Erro(503, "O envio ainda não foi ligado: falta configurar a chave da Evolution na função.");
+  await confirmarQuePodeEnviar(u);
+  const envio = await reservarEnvio({
+    p_contato: contato, p_usuario: u.id, p_usuario_nome: u.nome, p_tipo: dados.tipo, p_texto: dados.texto ?? null,
+    p_nome_arquivo: dados.nome_arquivo ?? null, p_mimetype: dados.mimetype ?? null, p_tamanho: dados.tamanho ?? null, p_destino: destino,
   });
   const res = await chamarEvolution(rota, corpo);
+  const agora = new Date().toISOString();
   const muda = res.ok
-    ? { status: "enviado", mensagem_id: res.id, atualizado_em: new Date().toISOString() }
-    : { status: "erro", erro: res.erro, atualizado_em: new Date().toISOString() };
-  await rest(`envios?id=eq.${envio.id}`, { method: "PATCH", body: JSON.stringify(muda) });
-  await evento(contato, u, res.ok ? `enviou_${dados.tipo}` : `falha_${dados.tipo}`, { envio: envio.id, arquivo: dados.nome_arquivo ?? undefined, erro: res.ok ? undefined : res.erro });
-  if (!res.ok) throw new Erro(502, `A mensagem não saiu. ${res.erro}`);
-  return { ok: true, envio: envio.id, mensagem_id: res.id };
+    ? { status: "enviado", mensagem_id: res.id, atualizado_em: agora }
+    : { status: res.incerto ? "incerto" : "erro", erro: res.erro, atualizado_em: agora };
+  await rest(`envios?id=eq.${envio}`, { method: "PATCH", body: JSON.stringify(muda) });
+  await evento(contato, u, res.ok ? `enviou_${dados.tipo}` : res.incerto ? `incerto_${dados.tipo}` : `falha_${dados.tipo}`, { envio, arquivo: dados.nome_arquivo ?? undefined });
+  if (!res.ok) {
+    console.error(`envio ${envio}: ${res.erro}`);
+    if (res.incerto) throw new Erro(504, "O WhatsApp demorou a responder e a mensagem pode ter saído. Confira na conversa antes de enviar de novo.");
+    throw new Erro(502, "A mensagem não saiu. Confira se o contato tem WhatsApp e tente de novo.");
+  }
+  return { ok: true, envio, mensagem_id: res.id };
 }
 
 async function equipe(u: Usuario) {
@@ -203,7 +248,6 @@ async function tratarPost(u: Usuario, corpo: any) {
       const texto = String(corpo.texto ?? "").replace(/\r\n/g, "\n").trim();
       if (!texto) throw new Erro(400, "Escreva a mensagem.");
       if (texto.length > 4000) throw new Erro(400, "A mensagem passou de 4.000 caracteres.");
-      await limiteDeEnvio(u);
       const destino = await contatoDestino(contato);
       return await registrarEnvio(u, contato, destino, { tipo: "texto", texto }, "sendText", { number: destino, text: `*${u.assinatura}:*\n${texto}` });
     }
@@ -211,19 +255,18 @@ async function tratarPost(u: Usuario, corpo: any) {
       if (!u.podeEnviar) throw new Erro(403, "Seu usuário pode ver as conversas, mas não responder.");
       const contato = inteiro(corpo.contato, "Contato");
       const mimetype = String(corpo.mimetype || "");
-      const mediatype = TIPOS_ARQUIVO[mimetype];
-      if (!mediatype) throw new Erro(400, "Tipo de arquivo não aceito. Use PDF, imagem, planilha, documento ou texto.");
+      const tipo = TIPOS_ARQUIVO[mimetype];
+      if (!tipo) throw new Erro(400, "Tipo de arquivo não aceito. Use PDF, imagem, planilha, documento ou texto.");
       const base64 = String(corpo.base64 || "").replace(/^data:[^,]*,/, "");
       if (!/^[A-Za-z0-9+/=\s]+$/.test(base64)) throw new Erro(400, "Arquivo inválido.");
       const tamanho = Math.floor(base64.replace(/\s/g, "").length * 3 / 4);
       if (tamanho <= 0 || tamanho > MAX_ARQUIVO) throw new Erro(400, "O arquivo precisa ter até 8 MB.");
-      const nome = String(corpo.nome || "arquivo").replace(/[\\/:*?"<>|\u0000-\u001f]/g, "_").slice(0, 120) || "arquivo";
+      const nome = nomeSeguro(corpo.nome, tipo.ext);
       const legenda = String(corpo.legenda ?? "").trim().slice(0, 1000);
-      await limiteDeEnvio(u);
       const destino = await contatoDestino(contato);
       const caption = legenda ? `*${u.assinatura}:*\n${legenda}` : `*${u.assinatura}*`;
       return await registrarEnvio(u, contato, destino, { tipo: "arquivo", texto: legenda || null, nome_arquivo: nome, mimetype, tamanho }, "sendMedia", {
-        number: destino, mediatype, mimetype, caption, media: base64.replace(/\s/g, ""), fileName: nome,
+        number: destino, mediatype: tipo.midia, mimetype, caption, media: base64.replace(/\s/g, ""), fileName: nome,
       });
     }
     case "nota": {
@@ -261,9 +304,13 @@ async function tratarPost(u: Usuario, corpo: any) {
       const nome = String(corpo.nome ?? "").trim().replace(/\s+/g, " ");
       if (!nome || nome.length > 40) throw new Erro(400, "O nome da etiqueta precisa ter de 1 a 40 caracteres.");
       const cor = CORES.includes(corpo.cor) ? corpo.cor : "neutro";
-      const ja = await rest(`etiquetas?select=id&apagada_em=is.null&nome=ilike.${encodeURIComponent(nome.replace(/[%_*]/g, ""))}`);
-      if (ja.length) throw new Erro(409, "Já existe uma etiqueta com esse nome.");
-      const [e] = await rest("etiquetas", { method: "POST", body: JSON.stringify({ nome, cor, criada_por: u.id }) });
+      let e;
+      try {
+        [e] = await rest("etiquetas", { method: "POST", body: JSON.stringify({ nome, cor, criada_por: u.id }) });
+      } catch (x) {
+        if (String((x as Error).message).includes("23505")) throw new Erro(409, "Já existe uma etiqueta com esse nome.");
+        throw x;
+      }
       await evento(null, u, "etiqueta_criada", { etiqueta: nome });
       return { ok: true, id: e.id };
     }
@@ -338,7 +385,7 @@ Deno.serve(async (req) => {
       case "omie":
         return json(await rpc("painel_omie", {}), 200, h);
       case "caixa": {
-        const dias = Math.min(90, Math.max(1, Number(u.searchParams.get("dias")) || 30));
+        const dias = Math.min(90, Math.max(1, Math.trunc(Number(u.searchParams.get("dias"))) || 30));
         return json(await rpc("painel_caixa", { p_dias: dias }), 200, h);
       }
       case "conversa_completa": {

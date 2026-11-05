@@ -5,7 +5,7 @@ import { brl, dataCurta, quando } from '../utils/formato.js';
 
 const CORES = [['neutro', 'Cinza'], ['azul', 'Azul'], ['verde', 'Verde'], ['amarelo', 'Amarelo'], ['vermelho', 'Vermelho'], ['roxo', 'Roxo']];
 const EVENTOS = {
-  enviou_texto: 'enviou mensagem', enviou_arquivo: 'enviou arquivo', falha_texto: 'tentou enviar mensagem (não saiu)', falha_arquivo: 'tentou enviar arquivo (não saiu)',
+  enviou_texto: 'enviou mensagem', enviou_arquivo: 'enviou arquivo', falha_texto: 'tentou enviar mensagem (não saiu)', falha_arquivo: 'tentou enviar arquivo (não saiu)', incerto_texto: 'enviou mensagem (sem confirmação)', incerto_arquivo: 'enviou arquivo (sem confirmação)',
   nota: 'escreveu nota', nota_apagada: 'apagou nota', etiqueta_posta: 'pôs a etiqueta', etiqueta_tirada: 'tirou a etiqueta', dono: 'passou a conversa para', dono_tirado: 'tirou o dono',
 };
 

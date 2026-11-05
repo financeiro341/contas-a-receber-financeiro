@@ -284,6 +284,8 @@ main.main-caixa { padding-top: 12px; padding-bottom: 12px; }
 .balao .hora .erro, .balao.falhou .hora { color: var(--danger-text); }
 .balao.pendente { opacity: .75; border-style: dashed; }
 .balao.falhou { opacity: 1; background: var(--danger-subtle); }
+.balao.incerto { opacity: 1; background: var(--warning-subtle); }
+.balao.incerto .hora { color: var(--warning-text); }
 .compositor { border-top: 1px solid var(--border); padding: 10px 14px; background: var(--bg-elevated); display: flex; flex-direction: column; gap: 6px; }
 .linha-compor { display: flex; gap: 8px; align-items: flex-end; }
 .linha-compor textarea { flex: 1; min-width: 0; resize: none; field-sizing: content; max-height: 160px; min-height: 40px; border: 1px solid var(--border-campo); border-radius: var(--radius-md); padding: 8px 10px; background: var(--bg-elevated); color: var(--text-primary); line-height: 1.4; }

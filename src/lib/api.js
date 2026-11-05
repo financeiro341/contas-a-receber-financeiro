@@ -24,7 +24,16 @@ export async function entrar(login, senha) {
   return data.session;
 }
 
-export async function sair() { await sb.auth.signOut(); }
+// Ao sair, apaga os rascunhos de mensagem guardados nesta aba.
+export function limparRascunhos() {
+  for (const area of [globalThis.sessionStorage, globalThis.localStorage]) {
+    try {
+      Object.keys(area || {}).filter((k) => k.startsWith('cr:rascunho:')).forEach((k) => area.removeItem(k));
+    } catch { /* sem armazenamento */ }
+  }
+}
+
+export async function sair() { limparRascunhos(); await sb.auth.signOut(); }
 
 export async function sessaoAtual() {
   const { data } = await sb.auth.getSession();
@@ -32,8 +41,19 @@ export async function sessaoAtual() {
 }
 
 export function aoMudarSessao(fn) {
-  const { data } = sb.auth.onAuthStateChange((_e, s) => fn(s));
+  const { data } = sb.auth.onAuthStateChange((_e, s) => { if (!s) limparRascunhos(); fn(s); });
   return () => data.subscription.unsubscribe();
+}
+
+// Os nomes de empresa vêm do Omie com entidades HTML (&amp;). Só esses campos são convertidos;
+// o texto das mensagens fica como chegou (o React escapa tudo na tela).
+const CAMPOS_OMIE = new Set(['empresa', 'empresas', 'nome']);
+const semEntidades = (t) => t.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
+function decodificarNomes(v, chave) {
+  if (typeof v === 'string') return CAMPOS_OMIE.has(chave) ? semEntidades(v) : v;
+  if (Array.isArray(v)) return v.map((x) => decodificarNomes(x, chave));
+  if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, decodificarNomes(x, k)]));
+  return v;
 }
 
 async function ler(params) {
@@ -41,10 +61,8 @@ async function ler(params) {
   if (!s) throw Object.assign(new Error('Entre de novo.'), { codigo: 401 });
   const q = new URLSearchParams(params).toString();
   const r = await fetch(`${FUNCAO}?${q}`, { headers: { Authorization: `Bearer ${s.access_token}` } });
-  // Os nomes vêm do Omie com entidades HTML (&amp;); a tela mostra texto puro (o React escapa).
-  const texto = (await r.text()).replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '\\"').replace(/&#39;/g, "'");
   let corpo = {};
-  try { corpo = JSON.parse(texto); } catch { corpo = {}; }
+  try { corpo = decodificarNomes(JSON.parse(await r.text())); } catch { corpo = {}; }
   if (!r.ok) throw Object.assign(new Error(corpo.erro || 'Não foi possível ler os dados.'), { codigo: r.status });
   return corpo;
 }

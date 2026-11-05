@@ -1,0 +1,5 @@
+# A função painel-cr recebe o token do Painel de Demandas (outro projeto Supabase), que não é um JWT
+# deste projeto. Por isso a conferência do JWT do Supabase fica desligada e a própria função confere
+# o login no Painel (auth/v1/user, perfil e senha_em_dia) antes de responder.
+[functions.painel-cr]
+verify_jwt = false
