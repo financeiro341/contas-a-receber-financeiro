@@ -3,6 +3,7 @@ import { lerConversa } from '../lib/api.js';
 import { NOME_SITUACAO } from '../constants.js';
 import { brl, dataLonga } from '../utils/formato.js';
 import { Estado, Vazio, useDados } from './comum.jsx';
+import Midia, { TIPOS_MIDIA } from './Midia.jsx';
 
 const ARQUIVO = { documentMessage: 'ti-file-text', imageMessage: 'ti-photo', audioMessage: 'ti-microphone', videoMessage: 'ti-video', stickerMessage: 'ti-mood-smile' };
 
@@ -13,6 +14,14 @@ export default function Conversa({ contato, dia, aoFechar, abrirNaCaixa }) {
   const corpo = useRef(null);
   // Abre já no fim da conversa, onde está a última mensagem.
   useEffect(() => { if (dados && corpo.current) corpo.current.scrollTop = corpo.current.scrollHeight; }, [dados]);
+  // Com o painel aberto, a página de trás não rola (uma barra de rolagem só, a da conversa).
+  useEffect(() => {
+    const raiz = document.documentElement;
+    // Ocupa o lugar da barra que some, para a página não pular para o lado.
+    raiz.style.setProperty('--barra', `${Math.max(0, window.innerWidth - raiz.clientWidth)}px`);
+    raiz.classList.add('travado');
+    return () => { raiz.classList.remove('travado'); raiz.style.removeProperty('--barra'); };
+  }, []);
   useEffect(() => {
     fechar.current?.focus();
     const tecla = (e) => { if (e.key === 'Escape') aoFechar(); };
@@ -62,8 +71,9 @@ export default function Conversa({ contato, dia, aoFechar, abrirNaCaixa }) {
             {(dados?.mensagens || []).length === 0 ? <Vazio icone="ti-message-off" titulo="Nenhuma mensagem neste dia" /> : dados.mensagens.map((m, i) => (
               <div key={i} className={`balao ${m.nos ? 'nos' : 'cliente'}`}>
                 {m.arquivo && <span className="arquivo"><i className={`ti ${ARQUIVO[m.tipo] || 'ti-paperclip'}`} aria-hidden="true" />{m.arquivo}</span>}
+                <Midia id={m.id} tipo={m.tipo} arquivo={m.arquivo} />
                 {m.texto && <div>{m.texto}</div>}
-                {!m.texto && !m.arquivo && <em style={{ color: 'var(--text-muted)' }}>{m.tipo === 'audioMessage' ? 'Áudio' : m.tipo === 'imageMessage' ? 'Imagem' : 'Mensagem sem texto'}</em>}
+                {!m.texto && !m.arquivo && !TIPOS_MIDIA.has(m.tipo) && <em style={{ color: 'var(--text-muted)' }}>{m.tipo === 'audioMessage' ? 'Áudio' : m.tipo === 'imageMessage' ? 'Imagem' : 'Mensagem sem texto'}</em>}
                 <span className="hora">{m.nos ? 'Nós' : 'Cliente'} · {m.hora}</span>
               </div>
             ))}

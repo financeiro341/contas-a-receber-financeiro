@@ -234,6 +234,211 @@ async function evolutionChat(rota: string, corpo: Record<string, unknown>) {
   }
 }
 
+// Mídia de uma mensagem (imagem, comprovante, áudio, vídeo, figurinha), baixada na hora do WhatsApp pela
+// Evolution (/chat/getBase64FromMediaMessage). Nada fica guardado no Supabase. Só tipos da lista abaixo
+// são entregues com o tipo verdadeiro; o resto vai como arquivo para baixar.
+const TIPOS_MIDIA = new Set(["imageMessage", "documentMessage", "audioMessage", "videoMessage", "stickerMessage"]);
+const MIME_MIDIA: Record<string, string> = {
+  "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif",
+  "audio/ogg": "ogg", "audio/mpeg": "mp3", "audio/mp4": "m4a", "audio/aac": "aac", "audio/amr": "amr",
+  "video/mp4": "mp4", "video/3gpp": "3gp", "application/pdf": "pdf",
+  ...Object.fromEntries(Object.entries(TIPOS_ARQUIVO).map(([k, v]) => [k, v.ext[0]])),
+};
+const MAX_MIDIA = 16 * 1024 * 1024;
+
+// fileLength do WhatsApp: número, texto ou { low, high } (inteiro de 64 bits partido em dois).
+function tamanhoDe(v: any): number | null {
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string" && /^\d{1,15}$/.test(v)) return Number(v);
+  if (v && typeof v === "object" && Number.isFinite(Number(v.low))) return (Number(v.low) >>> 0) + Number(v.high || 0) * 4294967296;
+  return null;
+}
+function tamanhoDa(m: any): number | null {
+  if (!m) return null;
+  const x = m.imageMessage ?? m.documentMessage ?? m.audioMessage ?? m.videoMessage ?? m.stickerMessage ?? m.documentWithCaptionMessage?.message?.documentMessage;
+  return x ? tamanhoDe(x.fileLength) : null;
+}
+
+// Lê a resposta em partes e para ao passar do limite (não guarda na memória um arquivo enorme).
+async function lerAte(resp: Response, limite: number): Promise<string> {
+  const declarado = Number(resp.headers.get("content-length") || 0);
+  if (declarado > limite) { await resp.body?.cancel(); throw new Erro(413, "Arquivo grande demais para abrir aqui (mais de 16 MB). Abra no WhatsApp."); }
+  const leitor = resp.body?.getReader();
+  if (!leitor) return "";
+  const partes: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await leitor.read();
+    if (done) break;
+    total += value.length;
+    if (total > limite) { await leitor.cancel(); throw new Erro(413, "Arquivo grande demais para abrir aqui (mais de 16 MB). Abra no WhatsApp."); }
+    partes.push(value);
+  }
+  const tudo = new Uint8Array(total);
+  let pos = 0;
+  for (const p of partes) { tudo.set(p, pos); pos += p.length; }
+  return new TextDecoder().decode(tudo);
+}
+
+async function midia(id: string) {
+  if (!/^[A-Za-z0-9_-]{6,100}$/.test(id)) throw new Erro(400, "Mensagem inválida.");
+  const m = (await rest(`mensagens?select=id,contato_id,remote_jid,de_nos,tipo,grupo,nome_arquivo,tamanho_arquivo&id=eq.${encodeURIComponent(id)}`))[0];
+  if (!m || m.grupo || !m.contato_id || !TIPOS_MIDIA.has(m.tipo)) throw new Erro(404, "Esta mensagem não tem arquivo para abrir.");
+  if (!EVO_CHAVE) throw new Erro(503, "A ligação com o WhatsApp ainda não foi configurada.");
+  // Tamanho antes de baixar: pela mensagem guardada ou, se não houver, pelo registro da Evolution (sem baixar o arquivo).
+  let tamanho = m.tamanho_arquivo != null ? Number(m.tamanho_arquivo) : null;
+  if (tamanho == null) {
+    try {
+      const r = await evolutionChat("findMessages", { where: { key: { id: m.id } }, page: 1, offset: 1 });
+      const bloco = r?.messages ?? r;
+      const reg = (Array.isArray(bloco) ? bloco : (bloco?.records ?? [])).find((x: any) => x?.key?.id === m.id);
+      tamanho = tamanhoDa(reg?.message);
+      if (tamanho != null) await rest(`mensagens?id=eq.${encodeURIComponent(m.id)}`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ tamanho_arquivo: tamanho }) });
+    } catch (e) { console.error(`midia ${m.id}: tamanho não lido (${(e as Error).message})`); }
+  }
+  if (tamanho != null && tamanho > MAX_MIDIA) throw new Erro(413, "Arquivo grande demais para abrir aqui (mais de 16 MB). Abra no WhatsApp.");
+  if (tamanho == null && (m.tipo === "documentMessage" || m.tipo === "videoMessage")) throw new Erro(422, "Não foi possível saber o tamanho deste arquivo. Abra no WhatsApp.");
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), 25_000);
+  let r: any = null;
+  try {
+    const resp = await fetch(`${EVOLUTION_URL}/chat/getBase64FromMediaMessage/${encodeURIComponent(INSTANCIA)}`, {
+      method: "POST",
+      headers: { apikey: EVO_CHAVE, "Content-Type": "application/json" },
+      body: JSON.stringify({ message: { key: { id: m.id, remoteJid: m.remote_jid, fromMe: !!m.de_nos } }, convertToMp4: false }),
+      signal: ctl.signal,
+    });
+    if (!resp.ok) { console.error(`midia ${m.id}: ${resp.status} ${(await resp.text()).slice(0, 200)}`); throw new Erro(404, "O WhatsApp não tem mais este arquivo (arquivos antigos expiram)."); }
+    r = JSON.parse(await lerAte(resp, Math.ceil(MAX_MIDIA * 4 / 3) + 64 * 1024));
+  } catch (e) {
+    if (e instanceof Erro) throw e;
+    console.error(`midia ${m.id}: ${(e as Error).message}`);
+    throw new Erro(502, "O WhatsApp não respondeu. Tente de novo em instantes.");
+  } finally {
+    clearTimeout(t);
+  }
+  const base64 = String(r?.base64 || "").replace(/^data:[^,]*,/, "").replace(/\s/g, "");
+  if (!base64 || !/^[A-Za-z0-9+/=]+$/.test(base64)) throw new Erro(404, "O WhatsApp não tem mais este arquivo (arquivos antigos expiram).");
+  if (base64.length * 3 / 4 > MAX_MIDIA) throw new Erro(413, "Arquivo grande demais para abrir aqui (mais de 16 MB). Abra no WhatsApp.");
+  const bruto = String(r?.mimetype || "").split(";")[0].trim().toLowerCase();
+  const ext = MIME_MIDIA[bruto];
+  const mimetype = ext ? bruto : "application/octet-stream";
+  const nome = nomeSeguro(r?.fileName || m.nome_arquivo || "arquivo", ext ? [ext] : ["bin"]);
+  return { id: m.id, mimetype, nome, base64 };
+}
+
+// Segunda via do boleto pelo Omie (só consulta): títulos em aberto das empresas ligadas ao contato e o PDF
+// do boleto JÁ EMITIDO (ObterBoleto, só quando boleto.cGerado = "S"). Nunca gera, prorroga ou cancela boleto
+// (isso pode ter tarifa do banco). As chaves ficam só nos segredos OMIE_APP_KEY e OMIE_APP_SECRET da função.
+const OMIE_KEY = Deno.env.get("OMIE_APP_KEY") || "";
+const OMIE_SECRET = Deno.env.get("OMIE_APP_SECRET") || "";
+const OMIE_SO_LEITURA = new Set(["ListarContasReceber", "ObterBoleto"]);
+const CATEGORIAS: Record<string, string> = { "1.02.02": "Honorários", "1.02.97": "Adicional anual" };
+
+async function omie(caminho: string, call: string, param: Record<string, unknown>) {
+  if (!OMIE_SO_LEITURA.has(call)) throw new Error(`omie: operação não permitida ${call}`);
+  if (!OMIE_KEY || !OMIE_SECRET) throw new Erro(503, "A ligação com o Omie ainda não foi configurada: faltam as chaves na função.");
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), 25_000);
+  try {
+    const r = await fetch(`https://app.omie.com.br/api/v1/${caminho}/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ call, app_key: OMIE_KEY, app_secret: OMIE_SECRET, param: [param] }),
+      signal: ctl.signal,
+    });
+    const texto = await r.text();
+    let dados: any = null;
+    try { dados = JSON.parse(texto); } catch { /* sem JSON */ }
+    if (dados?.faultstring) {
+      if (/n[ãa]o existem registros/i.test(dados.faultstring)) return null;
+      console.error(`omie ${call}: ${String(dados.faultstring).slice(0, 200)}`);
+      throw new Erro(502, "O Omie não respondeu como esperado. Tente de novo em instantes.");
+    }
+    if (!r.ok || !dados) { console.error(`omie ${call}: ${r.status} ${texto.slice(0, 200)}`); throw new Erro(502, "O Omie não respondeu como esperado. Tente de novo em instantes."); }
+    return dados;
+  } catch (e) {
+    if (e instanceof Erro) throw e;
+    console.error(`omie ${call}: ${(e as Error).message}`);
+    throw new Erro(502, "O Omie não respondeu. Tente de novo em instantes.");
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+const dataIso = (br: unknown) => { const m = String(br || "").match(/^(\d{2})\/(\d{2})\/(\d{4})$/); return m ? `${m[3]}-${m[2]}-${m[1]}` : null; };
+
+// Títulos em aberto (não pagos nem cancelados) das empresas ligadas ao contato, do vencimento mais antigo ao mais novo.
+// Guardados por 60 s por contato: abrir a lista e enviar em seguida não repete a consulta (o Omie recusa chamadas iguais seguidas).
+const cacheTitulos = new Map<number, { ate: number; lista: any[] }>();
+async function titulosDoContato(contato: number) {
+  const c = cacheTitulos.get(contato);
+  if (c && c.ate > Date.now()) return c.lista;
+  const lista = await consultarTitulos(contato);
+  cacheTitulos.set(contato, { ate: Date.now() + 60_000, lista });
+  if (cacheTitulos.size > 200) cacheTitulos.clear();
+  return lista;
+}
+async function consultarTitulos(contato: number) {
+  const empresas = await rest(`contato_clientes?select=codigo_cliente_omie,empresa&contato_id=eq.${contato}&codigo_cliente_omie=not.is.null&limit=10`);
+  const lista: any[] = [];
+  for (const e of empresas) {
+    for (let pagina = 1; pagina <= 3; pagina++) {
+      const r = await omie("financas/contareceber", "ListarContasReceber", {
+        pagina, registros_por_pagina: 100, filtrar_cliente: Number(e.codigo_cliente_omie), filtrar_apenas_titulos_em_aberto: "S", ordenar_por: "DATA_VENCIMENTO",
+      });
+      for (const t of r?.conta_receber_cadastro || []) {
+        // Não confia só no filtro do Omie: o título precisa ser do cliente ligado a este contato.
+        if (Number(t.codigo_cliente_fornecedor) !== Number(e.codigo_cliente_omie)) continue;
+        const status = String(t.status_titulo || "").toUpperCase();
+        if (["PAGO", "CANCELADO", "LIQUIDADO", "RECEBIDO"].includes(status)) continue;
+        lista.push({
+          codigo: Number(t.codigo_lancamento_omie),
+          cliente: Number(t.codigo_cliente_fornecedor),
+          empresa: e.empresa,
+          documento: t.numero_documento || null,
+          parcela: t.numero_parcela || null,
+          vencimento: dataIso(t.data_vencimento),
+          valor: Number(t.valor_documento) || 0,
+          status: t.status_titulo || null,
+          categoria: CATEGORIAS[t.codigo_categoria] || t.codigo_categoria || null,
+          boleto: t.boleto?.cGerado === "S",
+          codigo_barras: t.codigo_barras_ficha_compensacao || null,
+        });
+      }
+      if (!r || pagina >= Number(r.total_de_paginas || 1)) break;
+    }
+  }
+  return lista.sort((a, b) => String(a.vencimento).localeCompare(String(b.vencimento)));
+}
+
+// PDF do boleto já emitido: o link vem do Omie (CDN do Omie, com validade) e só ele é aceito.
+async function pdfDoBoleto(codigo: number): Promise<{ base64: string; barras: string | null }> {
+  const b = await omie("financas/contareceberboleto", "ObterBoleto", { nCodTitulo: codigo });
+  const link = String(b?.cLinkBoleto || "");
+  let url: URL;
+  try { url = new URL(link); } catch { throw new Erro(404, "O Omie não devolveu o boleto deste título."); }
+  if (url.protocol !== "https:" || url.hostname !== "cdn.omie.com.br") throw new Erro(502, "O Omie devolveu um endereço de boleto inesperado.");
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), 25_000);
+  try {
+    const r = await fetch(url.toString(), { signal: ctl.signal, redirect: "error" });
+    if (!r.ok) throw new Erro(502, "Não foi possível baixar o boleto do Omie.");
+    if (Number(r.headers.get("content-length") || 0) > MAX_ARQUIVO) { await r.body?.cancel(); throw new Erro(413, "O boleto passou de 8 MB."); }
+    const bytes = new Uint8Array(await r.arrayBuffer());
+    if (bytes.length > MAX_ARQUIVO) throw new Erro(413, "O boleto passou de 8 MB.");
+    if (String.fromCharCode(...bytes.slice(0, 4)) !== "%PDF") throw new Erro(502, "O arquivo do Omie não é um PDF.");
+    let bin = "";
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    return { base64: btoa(bin), barras: b?.cCodBarras || null };
+  } catch (e) {
+    if (e instanceof Erro) throw e;
+    throw new Erro(502, "Não foi possível baixar o boleto do Omie.");
+  } finally {
+    clearTimeout(t);
+  }
+}
+
 // Mesma leitura de texto e arquivo da função receber-evolution.
 function textoDa(m: any): string | null {
   if (!m) return null;
@@ -275,7 +480,7 @@ async function buscarHistorico(contato: number) {
         linhas.push({
           id: k.id, contato_id: contato, remote_jid: k.remoteJid ?? remoteJid, remote_jid_alt: k.remoteJidAlt ?? null, grupo: false,
           de_nos: !!k.fromMe, tipo: x.messageType ?? null, texto: texto ? String(texto).slice(0, 4000) : null, nome_arquivo: arquivoDa(x.message),
-          aparelho: x.source ?? null, enviada_em: new Date(ts * 1000).toISOString(), status: ultimo ? String(ultimo) : null,
+          aparelho: x.source ?? null, enviada_em: new Date(ts * 1000).toISOString(), status: ultimo ? String(ultimo) : null, tamanho_arquivo: tamanhoDa(x.message),
         });
       }
       const paginas = Number(bloco?.pages ?? 0);
@@ -376,6 +581,29 @@ async function tratarPost(u: Usuario, corpo: any) {
       return await registrarEnvio(u, contato, alvo, { tipo: "arquivo", texto: legenda || null, nome_arquivo: nome, mimetype, tamanho }, "sendMedia", {
         number: alvo.destino, mediatype: tipo.midia, mimetype, caption, media: base64.replace(/\s/g, ""), fileName: nome,
       }, { tipo: tipo.midia === "image" ? "imageMessage" : "documentMessage", texto: caption });
+    }
+    case "enviar_boleto": {
+      // Segunda via: o título precisa ser de uma empresa ligada a este contato, estar em aberto e ter boleto emitido.
+      if (!u.podeEnviar) throw new Erro(403, "Seu usuário pode ver as conversas, mas não responder.");
+      const contato = inteiro(corpo.contato, "Contato");
+      const codigo = inteiro(corpo.titulo, "Título");
+      const legenda = String(corpo.texto ?? "").replace(/\r\n/g, "\n").trim().slice(0, 1000);
+      // Permissão e destino conferidos antes de qualquer chamada ao Omie.
+      if (!EVO_CHAVE) throw new Erro(503, "O envio ainda não foi ligado: falta configurar a chave da Evolution na função.");
+      await confirmarQuePodeEnviar(u);
+      const alvo = await contatoDestino(contato);
+      const titulo = (await titulosDoContato(contato)).find((t) => t.codigo === codigo);
+      if (!titulo) throw new Erro(404, "Este título não está em aberto para as empresas deste contato.");
+      if (!titulo.boleto) throw new Erro(400, "Este título não tem boleto emitido no Omie. Emita pelo Omie antes de enviar.");
+      const pdf = await pdfDoBoleto(codigo);
+      const nome = nomeSeguro(`BOLETO CASTELO BRANCO CONTABILIDADE - ${titulo.empresa}`, ["pdf"]);
+      const caption = legenda ? `*${u.assinatura}:*\n${legenda}` : `*${u.assinatura}*`;
+      const tamanho = Math.floor(pdf.base64.length * 3 / 4);
+      const r = await registrarEnvio(u, contato, alvo, { tipo: "arquivo", texto: legenda || null, nome_arquivo: nome, mimetype: "application/pdf", tamanho }, "sendMedia", {
+        number: alvo.destino, mediatype: "document", mimetype: "application/pdf", caption, media: pdf.base64, fileName: nome,
+      }, { tipo: "documentMessage", texto: caption });
+      await evento(contato, u, "segunda_via", { documento: titulo.documento, parcela: titulo.parcela, vencimento: titulo.vencimento, valor: titulo.valor });
+      return r;
     }
     case "nota": {
       const contato = inteiro(corpo.contato, "Contato");
@@ -587,7 +815,7 @@ Deno.serve(async (req) => {
 
     switch (acao) {
       case "eu":
-        return json({ usuario: { id: usuario.id, nome: usuario.nome, papel: usuario.papel, pode_enviar: usuario.podeEnviar, assinatura: usuario.assinatura, envio_ligado: !!EVO_CHAVE }, hoje: hojeBrasil() }, 200, h);
+        return json({ usuario: { id: usuario.id, nome: usuario.nome, papel: usuario.papel, pode_enviar: usuario.podeEnviar, assinatura: usuario.assinatura, envio_ligado: !!EVO_CHAVE, omie_ligado: !!(OMIE_KEY && OMIE_SECRET) }, hoje: hojeBrasil() }, 200, h);
       case "dia":
         return json(await rpc("painel_dia", { p_dia: data }), 200, h);
       case "atendimento":
@@ -616,6 +844,10 @@ Deno.serve(async (req) => {
         const [c, extras] = await Promise.all([conversa, rpc("painel_conversa_extras", { p_contato: contato })]);
         return json({ ...c, ...extras }, 200, h);
       }
+      case "titulos":
+        return json({ omie_ligado: !!(OMIE_KEY && OMIE_SECRET), titulos: OMIE_KEY && OMIE_SECRET ? await titulosDoContato(inteiro(u.searchParams.get("contato"), "Contato")) : [] }, 200, h);
+      case "midia":
+        return json(await midia(String(u.searchParams.get("id") || "")), 200, h);
       case "etiquetas":
         return json(await rest("etiquetas?select=id,nome,cor&apagada_em=is.null&order=nome"), 200, h);
       case "equipe":

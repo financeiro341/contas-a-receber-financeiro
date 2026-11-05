@@ -9,7 +9,7 @@ const EVENTOS = {
   enviou_texto: 'enviou mensagem', enviou_arquivo: 'enviou arquivo', falha_texto: 'tentou enviar mensagem (não saiu)', falha_arquivo: 'tentou enviar arquivo (não saiu)', incerto_texto: 'enviou mensagem (sem confirmação)', incerto_arquivo: 'enviou arquivo (sem confirmação)',
   nota: 'escreveu nota', nota_apagada: 'apagou nota', etiqueta_posta: 'pôs a etiqueta', etiqueta_tirada: 'tirou a etiqueta', dono: 'passou a conversa para', dono_tirado: 'tirou o dono',
   resolveu: 'marcou como resolvida', reabriu: 'reabriu a conversa', retorno_marcado: 'marcou retorno', retorno_feito: 'fez o retorno', retorno_cancelado: 'cancelou o retorno',
-  ligacao: 'registrou ligação', ligacao_desfeita: 'desfez o registro de ligação', historico: 'trouxe mensagens antigas',
+  ligacao: 'registrou ligação', segunda_via: 'enviou a segunda via do boleto', ligacao_desfeita: 'desfez o registro de ligação', historico: 'trouxe mensagens antigas',
 };
 
 // Coluna da direita: empresas, cobrança, dono, etiquetas, notas internas e histórico da conversa.

@@ -408,3 +408,21 @@ main.main-caixa { padding-top: 12px; padding-bottom: 12px; }
   .tabela-pessoas.em-cartoes td.num > b, .tabela-pessoas.em-cartoes td.num > div { display: inline; }
   .tabela-pessoas.em-cartoes td.num > div::before { content: " · "; }
 }
+
+/* Uma rolagem por vez: com o painel da conversa aberto a página de trás fica parada,
+   e a rolagem de uma área não passa para a outra ao chegar no fim. */
+html.travado, html.travado body { overflow: hidden; }
+html.travado body { padding-right: var(--barra, 0px); }
+.lateral .corpo, .conversa-corpo, .caixa-itens, .conversa-detalhes, .respostas-lista, .fila { overscroll-behavior: contain; }
+
+/* Imagem, comprovante e áudio dentro da conversa */
+.midia { display: block; margin: 4px 0; }
+.midia-botao { min-height: 32px; padding: 3px 10px; font-size: 13px; }
+.midia-links { display: flex; gap: 6px; flex-wrap: wrap; }
+.midia-img { display: block; max-width: 100%; max-height: 320px; border-radius: 8px; object-fit: contain; background: var(--bg-subtle); }
+.midia-figurinha { display: block; width: 120px; height: 120px; object-fit: contain; }
+.midia-audio { width: min(300px, 100%); height: 40px; }
+.midia-erro { display: block; font-size: 12px; color: var(--danger-text); margin-top: 3px; white-space: normal; }
+.segunda-via .titulo-item:disabled { opacity: .6; cursor: not-allowed; }
+.titulo-item .linha-titulo { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.segunda-via textarea { border: 1px solid var(--border-campo); border-radius: var(--radius-md); padding: 8px 10px; background: var(--bg-elevated); color: var(--text-primary); resize: vertical; }

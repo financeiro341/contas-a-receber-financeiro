@@ -33,7 +33,12 @@ export function limparRascunhos() {
   }
 }
 
-export async function sair() { limparRascunhos(); await sb.auth.signOut(); }
+// O que mais precisa ser apagado ao sair (ex.: imagens e comprovantes abertos nesta aba).
+const aoSairFns = new Set();
+export const aoSair = (fn) => { aoSairFns.add(fn); };
+function limparTudo() { limparRascunhos(); aoSairFns.forEach((fn) => { try { fn(); } catch { /* segue */ } }); }
+
+export async function sair() { limparTudo(); await sb.auth.signOut(); }
 
 export async function sessaoAtual() {
   const { data } = await sb.auth.getSession();
@@ -41,7 +46,7 @@ export async function sessaoAtual() {
 }
 
 export function aoMudarSessao(fn) {
-  const { data } = sb.auth.onAuthStateChange((_e, s) => { if (!s) limparRascunhos(); fn(s); });
+  const { data } = sb.auth.onAuthStateChange((_e, s) => { if (!s) limparTudo(); fn(s); });
   return () => data.subscription.unsubscribe();
 }
 
@@ -79,6 +84,9 @@ export const lerCaixa = (dias = 30) => ler({ acao: 'caixa', dias: String(dias) }
 export const lerConversaCompleta = (contato, antes) => ler({ acao: 'conversa_completa', contato: String(contato), ...(antes ? { antes } : {}) });
 export const lerEtiquetas = () => ler({ acao: 'etiquetas' });
 export const lerEquipe = () => ler({ acao: 'equipe' });
+export const lerMidia = (id) => ler({ acao: 'midia', id: String(id) });
+export const lerTitulos = (contato) => ler({ acao: 'titulos', contato: String(contato) });
+export const enviarBoleto = (contato, titulo, texto) => postar({ acao: 'enviar_boleto', contato, titulo, texto });
 
 async function postar(corpo) {
   const s = await sessaoAtual();

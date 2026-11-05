@@ -7,6 +7,8 @@ import { Iniciais } from './CaixaLista.jsx';
 import CaixaDetalhes from './CaixaDetalhes.jsx';
 import RespostasProntas, { preencher } from './RespostasProntas.jsx';
 import AcoesConversa, { rotuloRetorno } from './AcoesConversa.jsx';
+import Midia, { TIPOS_MIDIA } from './Midia.jsx';
+import SegundaVia from './SegundaVia.jsx';
 
 const ICONE_ARQUIVO = { documentMessage: 'ti-file-text', imageMessage: 'ti-photo', audioMessage: 'ti-microphone', videoMessage: 'ti-video', stickerMessage: 'ti-mood-smile' };
 const ACEITOS = '.pdf,.jpg,.jpeg,.png,.xlsx,.xls,.docx,.doc,.csv,.txt,.zip';
@@ -55,6 +57,7 @@ export default function CaixaConversa({ contato, eu, etiquetas, equipe, aoVoltar
   const [historico, setHistorico] = useState(null); // null, 'lendo' ou { novas }
   const [confirmacao, setConfirmacao] = useState('');
   const [baixando, setBaixando] = useState(false);
+  const [segundaVia, setSegundaVia] = useState(false);
 
   useEffect(() => { guardarRascunho(rascunho, texto); }, [rascunho, texto]);
   useEffect(() => { if (!confirmacao) return undefined; const t = setTimeout(() => setConfirmacao(''), 6000); return () => clearTimeout(t); }, [confirmacao]);
@@ -277,8 +280,9 @@ export default function CaixaConversa({ contato, eu, etiquetas, equipe, aoVoltar
                       {separador}
                       <div className={`balao ${m.nos ? 'nos' : 'cliente'}`}>
                         {m.arquivo && <span className="arquivo"><i className={`ti ${ICONE_ARQUIVO[m.tipo] || 'ti-paperclip'}`} aria-hidden="true" />{m.arquivo}</span>}
+                        <Midia id={m.id} tipo={m.tipo} arquivo={m.arquivo} />
                         {m.texto && <div><TextoWhats texto={m.texto} /></div>}
-                        {!m.texto && !m.arquivo && <em className="sem-texto">{m.tipo === 'audioMessage' ? 'Áudio' : m.tipo === 'imageMessage' ? 'Imagem' : m.tipo === 'videoMessage' ? 'Vídeo' : m.tipo === 'stickerMessage' ? 'Figurinha' : 'Mensagem sem texto'}</em>}
+                        {!m.texto && !m.arquivo && !TIPOS_MIDIA.has(m.tipo) && <em className="sem-texto">{m.tipo === 'audioMessage' ? 'Áudio' : m.tipo === 'imageMessage' ? 'Imagem' : m.tipo === 'videoMessage' ? 'Vídeo' : m.tipo === 'stickerMessage' ? 'Figurinha' : 'Mensagem sem texto'}</em>}
                         <span className="hora">
                           {m.nos ? (m.por ? `${m.por}, pelo sistema` : 'Nós') : 'Cliente'} · {horaDe(m.em)}
                           {m.nos && <> <Leitura status={m.status} /></>}
@@ -324,6 +328,10 @@ export default function CaixaConversa({ contato, eu, etiquetas, equipe, aoVoltar
                   <button type="button" className="limpar" onClick={() => setArquivo(null)} aria-label="Tirar o arquivo"><i className="ti ti-x" aria-hidden="true" /></button>
                 </div>
               )}
+              {segundaVia && (
+                <SegundaVia contato={contato} dados={d} aoFechar={() => setSegundaVia(false)}
+                  aoEnviado={(msg) => { setSegundaVia(false); avisar(msg); mudou(); setTimeout(() => conv.atualizar(), 3000); }} />
+              )}
               {painelRespostas !== null && (
                 <RespostasProntas filtro={painelRespostas} respostas={respostas || []} eu={eu} aoEscolher={escolherResposta}
                   aoFechar={() => setPainelRespostas(null)} recarregar={recarregarRespostas} />
@@ -331,7 +339,10 @@ export default function CaixaConversa({ contato, eu, etiquetas, equipe, aoVoltar
               <div className="linha-compor">
                 <input ref={anexo} type="file" accept={ACEITOS} onChange={escolherArquivo} hidden />
                 <button type="button" className="botao icone" onClick={() => anexo.current?.click()} aria-label="Anexar arquivo" title="Anexar arquivo (até 8 MB)" disabled={!podeResponder || enviando}><i className="ti ti-paperclip" aria-hidden="true" /></button>
-                <button type="button" className="botao icone botao-respostas" onClick={() => setPainelRespostas(painelRespostas === null ? '' : null)} aria-label="Respostas prontas" aria-expanded={painelRespostas !== null} title="Respostas prontas (ou digite / no começo)" disabled={!podeResponder || enviando}><i className="ti ti-bolt" aria-hidden="true" /></button>
+                {eu?.omie_ligado && (
+                  <button type="button" className="botao icone botao-segunda-via" onClick={() => { setPainelRespostas(null); setSegundaVia(!segundaVia); }} aria-label="Segunda via do boleto" aria-expanded={segundaVia} title="Segunda via do boleto (Omie)" disabled={!podeResponder || enviando}><i className="ti ti-file-invoice" aria-hidden="true" /></button>
+                )}
+                <button type="button" className="botao icone botao-respostas" onClick={() => { setSegundaVia(false); setPainelRespostas(painelRespostas === null ? '' : null); }} aria-label="Respostas prontas" aria-expanded={painelRespostas !== null} title="Respostas prontas (ou digite / no começo)" disabled={!podeResponder || enviando}><i className="ti ti-bolt" aria-hidden="true" /></button>
                 <label className="so-leitor" htmlFor={`msg-${contato}`}>Mensagem</label>
                 <textarea
                   id={`msg-${contato}`}

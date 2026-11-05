@@ -54,6 +54,16 @@ function nomeArquivo(m: any): string | null {
   return m?.documentMessage?.fileName ?? m?.documentWithCaptionMessage?.message?.documentMessage?.fileName ?? null;
 }
 
+// Tamanho do arquivo (fileLength: número, texto ou { low, high }), para a função painel-cr recusar arquivo enorme antes de baixar.
+function tamanhoDa(m: any): number | null {
+  const x = m?.imageMessage ?? m?.documentMessage ?? m?.audioMessage ?? m?.videoMessage ?? m?.stickerMessage ?? m?.documentWithCaptionMessage?.message?.documentMessage;
+  const v = x?.fileLength;
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string" && /^\d{1,15}$/.test(v)) return Number(v);
+  if (v && typeof v === "object" && Number.isFinite(Number(v.low))) return (Number(v.low) >>> 0) + Number(v.high || 0) * 4294967296;
+  return null;
+}
+
 function telefoneDo(jid: string | null): string | null {
   if (!jid || !jid.endsWith("@s.whatsapp.net")) return null;
   const d = jid.split("@")[0].split(":")[0].replace(/\D/g, "");
@@ -119,6 +129,7 @@ async function tratarMensagem(d: any) {
     tipo: d.messageType ?? null,
     texto: texto ? String(texto).slice(0, 4000) : null,
     nome_arquivo: nomeArquivo(d.message),
+    tamanho_arquivo: tamanhoDa(d.message),
     aparelho: d.source ?? null,
     enviada_em: quando,
     status: d.status ?? null,

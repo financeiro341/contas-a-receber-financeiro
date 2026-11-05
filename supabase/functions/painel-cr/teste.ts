@@ -47,6 +47,35 @@ globalThis.fetch = async (input: any, init: any = {}) => {
   if (url.includes("/rest/v1/mensagens?select=id,remote_jid")) return resp([{ id: "U1", remote_jid: "556281437001@s.whatsapp.net" }]);
   if (url.includes("/rest/v1/mensagens?id=in.") && metodo === "PATCH") { db.lidas = url; return new Response(null, { status: 204 }); }
   if (url.includes("/rest/v1/mensagens?on_conflict=id&select=id")) { const l = JSON.parse(init.body); db.historico = l; return resp(l.map((x: any) => ({ id: x.id })), 201); }
+  if (url.includes("/rest/v1/mensagens?select=id,contato_id,remote_jid")) {
+    const id = decodeURIComponent(url.split("id=eq.")[1] || "");
+    const base = { id, contato_id: 94, remote_jid: "556281437001@s.whatsapp.net", de_nos: false, grupo: false, nome_arquivo: null };
+    if (id === "3EB0IMG1" || id === "3EB0SVG1") return resp([{ ...base, tipo: "imageMessage" }]);
+    if (id === "3EB0GRP1") return resp([{ ...base, grupo: true, tipo: "imageMessage" }]);
+    if (id === "3EB0TXT1") return resp([{ ...base, tipo: "conversation" }]);
+    if (id === "3EB0BIG1") return resp([{ ...base, tipo: "documentMessage", tamanho_arquivo: 20 * 1024 * 1024 }]);
+    if (id === "3EB0DOC1") return resp([{ ...base, tipo: "documentMessage", tamanho_arquivo: null }]);
+    return resp([]);
+  }
+  if (url.includes("/chat/getBase64FromMediaMessage/")) {
+    const b = JSON.parse(init.body);
+    db.midiaPedida = b;
+    if (b.message.key.id === "3EB0SVG1") return resp({ mimetype: "image/svg+xml", fileName: "x.svg", base64: btoa("<svg onload=alert(1)>") });
+    return resp({ mediaType: "imageMessage", mimetype: "image/jpeg; charset=binary", fileName: null, base64: btoa("JPEG") });
+  }
+  if (url.includes("/rest/v1/contato_clientes")) return resp([{ codigo_cliente_omie: 4112028795, empresa: "BIMAIS CONSTRUTORA E INCORPORADORA LTDA" }]);
+  if (url.startsWith("https://app.omie.com.br/")) {
+    const b = JSON.parse(init.body);
+    db.omieCalls = [...(db.omieCalls || []), b.call];
+    if (b.app_key !== "omie-chave" || b.app_secret !== "omie-segredo") return resp({ faultstring: "chave errada" }, 500);
+    if (b.call === "ListarContasReceber") {
+      const t = (cod: number, venc: string, st: string, gerado: string, cat = "1.02.02") => ({ codigo_lancamento_omie: cod, codigo_cliente_fornecedor: 4112028795, numero_documento: "9007", numero_parcela: "001/001", data_vencimento: venc, valor_documento: 1621, status_titulo: st, codigo_categoria: cat, boleto: { cGerado: gerado }, codigo_barras_ficha_compensacao: "03399.0" });
+      return resp({ pagina: 1, total_de_paginas: 1, conta_receber_cadastro: [{ ...t(5, "01/11/2026", "A VENCER", "S"), codigo_cliente_fornecedor: 999 }, t(3, "10/12/2026", "A VENCER", "S", "1.02.97"), t(1, "10/11/2026", "A VENCER", "S"), t(2, "10/10/2026", "ATRASADO", "N"), t(4, "10/09/2026", "PAGO", "S")] });
+    }
+    if (b.call === "ObterBoleto") return resp({ cLinkBoleto: db.linkRuim ? "https://evil.example/x.pdf" : "https://cdn.omie.com.br/repo/boleto.pdf?Signature=x", cCodBarras: "03399.0" });
+    return resp({ faultstring: "não esperado" }, 500);
+  }
+  if (url.startsWith("https://cdn.omie.com.br/")) return new Response(new TextEncoder().encode("%PDF-1.4 boleto"), { status: 200, headers: { "content-type": "application/pdf" } });
   if (url.includes("/rest/v1/respostas_prontas") && metodo === "POST") return resp([{ id: 5 }], 201);
   if (url.includes("/rest/v1/resolucoes")) { db.resolucoes = [...(db.resolucoes || []), { metodo, url, corpo: init.body }]; return new Response(null, { status: metodo === "DELETE" ? 204 : 201 }); }
   if (url.includes("/rest/v1/lembretes") && metodo === "POST") { const l = { id: 11, ...JSON.parse(init.body) }; db.lembretes = [l]; return resp([l], 201); }
@@ -63,6 +92,8 @@ globalThis.fetch = async (input: any, init: any = {}) => {
 Deno.env.set("SUPABASE_URL", "https://mhihrbchidudhgvpouia.supabase.co");
 Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", "servico-teste");
 Deno.env.set("EVOLUTION_APIKEY", "chave-teste");
+Deno.env.set("OMIE_APP_KEY", "omie-chave");
+Deno.env.set("OMIE_APP_SECRET", "omie-segredo");
 const servir = Deno.serve;
 (Deno as any).serve = (f: any) => { servidor = f; return { shutdown() {} }; };
 await import("./index.ts");
@@ -171,3 +202,46 @@ const r4 = await fetch("http://fn/?acao=eu", { headers: { Authorization: "Bearer
 ok(r4.status === 401, "fora do financeiro não entra");
 const r5 = await fetch("http://fn/", { method: "POST", headers: { Authorization: "Bearer terceiro" }, body: "{}" });
 ok(r5.status === 401, "POST sem permissão");
+
+perfil = { first_name: "Maria", last_name: "Clara", role: "financeiro", sector: "financeiro" };
+const midia = async (id: string) => { const r = await fetch(`http://fn/?acao=midia&id=${id}`, { headers: { Authorization: "Bearer tok" } }); return [r.status, await r.json()]; };
+{
+  let [s, b] = await midia("3EB0IMG1");
+  ok(s === 200 && b.mimetype === "image/jpeg" && b.nome === "arquivo.jpg" && atob(b.base64) === "JPEG" && db.midiaPedida.message.key.remoteJid === "556281437001@s.whatsapp.net", "imagem baixada da Evolution " + JSON.stringify({ ...b, base64: undefined }));
+  [s, b] = await midia("3EB0SVG1");
+  ok(s === 200 && b.mimetype === "application/octet-stream" && b.nome.endsWith(".bin"), "SVG vira arquivo para baixar, nunca imagem");
+  [s] = await midia("3EB0GRP1");
+  ok(s === 404, "mensagem de grupo recusada");
+  [s] = await midia("3EB0TXT1");
+  ok(s === 404, "mensagem sem arquivo recusada");
+  db.midiaPedida = null;
+  [s] = await midia("3EB0BIG1");
+  ok(s === 413 && !db.midiaPedida, "documento de 20 MB recusado sem pedir à Evolution");
+  [s] = await midia("3EB0DOC1");
+  ok(s === 422 && !db.midiaPedida, "documento sem tamanho conhecido recusado sem baixar");
+  [s] = await midia("../x");
+  ok(s === 400, "id inválido recusado");
+}
+
+{
+  const r = await fetch("http://fn/?acao=titulos&contato=94", { headers: { Authorization: "Bearer tok" } });
+  const b = await r.json();
+  ok(r.status === 200 && b.omie_ligado && b.titulos.length === 3 && b.titulos[0].codigo === 2 && b.titulos[2].categoria === "Adicional anual" && !b.titulos.some((t: any) => t.codigo === 4), "títulos em aberto do contato, do mais antigo ao mais novo, sem o pago");
+  let [s, x] = await post({ acao: "enviar_boleto", contato: 94, titulo: 1, texto: "Segue a segunda via." });
+  const med = JSON.parse(chamadas.filter((c) => c.url.includes("sendMedia")).pop()!.corpo!);
+  ok(s === 200 && med.fileName === "BOLETO CASTELO BRANCO CONTABILIDADE - BIMAIS CONSTRUTORA E INCORPORADORA LTDA.pdf" && atob(med.media).startsWith("%PDF") && med.caption === "*Maria Clara - Dep. Financeiro:*\nSegue a segunda via." && db.eventos_caixa.some((e: any) => e.tipo === "segunda_via"), "boleto do Omie enviado ao cliente " + JSON.stringify(x));
+  [s, x] = await post({ acao: "enviar_boleto", contato: 94, titulo: 2 });
+  ok(s === 400 && /não tem boleto emitido/.test(x.erro), "título sem boleto emitido recusado (não gera boleto)");
+  [s] = await post({ acao: "enviar_boleto", contato: 94, titulo: 999 });
+  ok(s === 404, "título inexistente recusado");
+  [s] = await post({ acao: "enviar_boleto", contato: 94, titulo: 5 });
+  ok(s === 404 && !b.titulos.some((t: any) => t.codigo === 5), "título de outro cliente que o Omie devolveu é descartado");
+  db.linkRuim = true;
+  [s] = await post({ acao: "enviar_boleto", contato: 94, titulo: 1 });
+  ok(s === 502, "link de boleto fora do Omie recusado");
+  db.linkRuim = false;
+  ok((db.omieCalls || []).every((c: string) => c === "ListarContasReceber" || c === "ObterBoleto"), "no Omie, só consulta: " + [...new Set(db.omieCalls)].join(","));
+  perfil = { first_name: "Olavio", last_name: "Santos", role: "financeiro", sector: "financeiro" };
+  const r9 = await fetch("http://fn/", { method: "POST", headers: { Authorization: "Bearer outro2", "Content-Type": "application/json" }, body: JSON.stringify({ acao: "enviar_boleto", contato: 94, titulo: 1 }) });
+  ok(r9.status === 403, "Olavio não envia boleto");
+}
