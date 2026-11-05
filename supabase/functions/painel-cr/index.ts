@@ -137,12 +137,23 @@ async function evento(contato: number | null, u: Usuario, tipo: string, detalhe:
   await rest("eventos_caixa", { method: "POST", body: JSON.stringify({ contato_id: contato, usuario_id: u.id, usuario_nome: u.nome, tipo, detalhe }) });
 }
 
-async function contatoDestino(id: number): Promise<string> {
+// Para quem a Evolution manda (número sem @ ou o lid) e o jid que fica gravado na mensagem.
+async function contatoDestino(id: number): Promise<{ destino: string; jid: string }> {
   const c = (await rest(`contatos?select=id,jid,lid,telefone&id=eq.${id}`))[0];
   if (!c) throw new Erro(404, "Contato não encontrado.");
-  if (c.jid && String(c.jid).endsWith("@s.whatsapp.net")) return String(c.jid).split("@")[0];
-  if (c.lid) return String(c.lid);
+  if (c.jid && String(c.jid).endsWith("@s.whatsapp.net")) return { destino: String(c.jid).split("@")[0], jid: String(c.jid) };
+  if (c.lid) return { destino: String(c.lid), jid: String(c.lid) };
   throw new Erro(400, "Este contato não tem número para resposta.");
+}
+
+// A Evolution não manda o aviso de mensagem nova para o que sai pela API: a função grava a mensagem.
+// Os avisos de status (entregue, lida) chegam depois e atualizam a mesma linha, pelo id.
+async function gravarMensagemEnviada(id: string, contato: number, jid: string, tipo: string, texto: string | null, arquivo: string | null) {
+  await rest("mensagens?on_conflict=id", {
+    method: "POST",
+    headers: { Prefer: "resolution=ignore-duplicates,return=minimal" },
+    body: JSON.stringify({ id, contato_id: contato, remote_jid: jid, grupo: false, de_nos: true, tipo, texto, nome_arquivo: arquivo, aparelho: "sistema", enviada_em: new Date().toISOString(), status: "SERVER_ACK" }),
+  });
 }
 
 // Permissão de envio conferida na hora (sem o cache de 60 s), para valer logo quando é tirada.
@@ -201,7 +212,8 @@ async function chamarEvolution(rota: string, corpo: Record<string, unknown>) {
   }
 }
 
-async function registrarEnvio(u: Usuario, contato: number, destino: string, dados: Record<string, any>, rota: string, corpo: Record<string, unknown>) {
+async function registrarEnvio(u: Usuario, contato: number, alvo: { destino: string; jid: string }, dados: Record<string, any>, rota: string, corpo: Record<string, unknown>, gravado: { tipo: string; texto: string | null }) {
+  const destino = alvo.destino;
   if (!EVO_CHAVE) throw new Erro(503, "O envio ainda não foi ligado: falta configurar a chave da Evolution na função.");
   await confirmarQuePodeEnviar(u);
   const envio = await reservarEnvio({
@@ -214,6 +226,10 @@ async function registrarEnvio(u: Usuario, contato: number, destino: string, dado
     ? { status: "enviado", mensagem_id: res.id, atualizado_em: agora }
     : { status: res.incerto ? "incerto" : "erro", erro: res.erro, atualizado_em: agora };
   await rest(`envios?id=eq.${envio}`, { method: "PATCH", body: JSON.stringify(muda) });
+  if (res.ok && res.id) {
+    try { await gravarMensagemEnviada(res.id, contato, alvo.jid, gravado.tipo, gravado.texto, dados.nome_arquivo ?? null); }
+    catch (e) { console.error(`mensagem do envio ${envio} não gravada: ${(e as Error).message}`); }
+  }
   await evento(contato, u, res.ok ? `enviou_${dados.tipo}` : res.incerto ? `incerto_${dados.tipo}` : `falha_${dados.tipo}`, { envio, arquivo: dados.nome_arquivo ?? undefined });
   if (!res.ok) {
     console.error(`envio ${envio}: ${res.erro}`);
@@ -248,8 +264,9 @@ async function tratarPost(u: Usuario, corpo: any) {
       const texto = String(corpo.texto ?? "").replace(/\r\n/g, "\n").trim();
       if (!texto) throw new Erro(400, "Escreva a mensagem.");
       if (texto.length > 4000) throw new Erro(400, "A mensagem passou de 4.000 caracteres.");
-      const destino = await contatoDestino(contato);
-      return await registrarEnvio(u, contato, destino, { tipo: "texto", texto }, "sendText", { number: destino, text: `*${u.assinatura}:*\n${texto}` });
+      const alvo = await contatoDestino(contato);
+      const final = `*${u.assinatura}:*\n${texto}`;
+      return await registrarEnvio(u, contato, alvo, { tipo: "texto", texto }, "sendText", { number: alvo.destino, text: final }, { tipo: "conversation", texto: final });
     }
     case "enviar_arquivo": {
       if (!u.podeEnviar) throw new Erro(403, "Seu usuário pode ver as conversas, mas não responder.");
@@ -263,11 +280,11 @@ async function tratarPost(u: Usuario, corpo: any) {
       if (tamanho <= 0 || tamanho > MAX_ARQUIVO) throw new Erro(400, "O arquivo precisa ter até 8 MB.");
       const nome = nomeSeguro(corpo.nome, tipo.ext);
       const legenda = String(corpo.legenda ?? "").trim().slice(0, 1000);
-      const destino = await contatoDestino(contato);
+      const alvo = await contatoDestino(contato);
       const caption = legenda ? `*${u.assinatura}:*\n${legenda}` : `*${u.assinatura}*`;
-      return await registrarEnvio(u, contato, destino, { tipo: "arquivo", texto: legenda || null, nome_arquivo: nome, mimetype, tamanho }, "sendMedia", {
-        number: destino, mediatype: tipo.midia, mimetype, caption, media: base64.replace(/\s/g, ""), fileName: nome,
-      });
+      return await registrarEnvio(u, contato, alvo, { tipo: "arquivo", texto: legenda || null, nome_arquivo: nome, mimetype, tamanho }, "sendMedia", {
+        number: alvo.destino, mediatype: tipo.midia, mimetype, caption, media: base64.replace(/\s/g, ""), fileName: nome,
+      }, { tipo: tipo.midia === "image" ? "imageMessage" : "documentMessage", texto: caption });
     }
     case "nota": {
       const contato = inteiro(corpo.contato, "Contato");

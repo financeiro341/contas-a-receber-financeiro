@@ -31,6 +31,7 @@ globalThis.fetch = async (input: any, init: any = {}) => {
   if (url.includes("/rest/v1/envios") && metodo === "POST") { const e = { id: db.envios.length + 1, ...JSON.parse(init.body) }; db.envios.push(e); return resp([e], 201); }
   if (url.includes("/rest/v1/envios?id=eq") && metodo === "PATCH") { Object.assign(db.envios[db.envios.length - 1], JSON.parse(init.body)); return resp([]); }
   if (url.includes("/rest/v1/eventos_caixa")) { db.eventos_caixa.push(JSON.parse(init.body)); return resp([{ id: 1 }], 201); }
+  if (url.includes("/rest/v1/mensagens") && metodo === "POST") { db.mensagens = [...(db.mensagens || []), JSON.parse(init.body)]; return new Response(null, { status: 201 }); }
   if (url.includes("/rest/v1/notas") && metodo === "POST") { const n = { id: 7, ...JSON.parse(init.body) }; db.notas.push(n); return resp([n], 201); }
   if (url.includes("api-evolution.iapessoas.com.br") && evoDemora) { const e = new Error("abortado"); e.name = "AbortError"; throw e; }
   if (url.includes("api-evolution.iapessoas.com.br")) return evoStatus < 300 ? resp({ key: { id: "MSG123", fromMe: true }, status: "PENDING" }, evoStatus) : resp({ status: 400, response: { message: [{ exists: false, number: "x" }] } }, evoStatus);
@@ -54,6 +55,7 @@ ok(JSON.parse(evo.corpo!).text === "*Maria Clara - Dep. Financeiro:*\nBom dia, s
 ok(JSON.parse(evo.corpo!).number === "556281437001", "número sem @");
 ok(evo.headers.apikey === "chave-teste", "chave só no servidor");
 ok(db.envios[0].status === "enviado" && db.envios[0].mensagem_id === "MSG123", "envio gravado como enviado");
+ok(db.mensagens?.[0]?.id === "MSG123" && db.mensagens[0].remote_jid === "556281437001@s.whatsapp.net" && db.mensagens[0].texto.startsWith("*Maria Clara") && db.mensagens[0].de_nos === true, "mensagem enviada gravada na conversa");
 
 [s, b] = await post({ acao: "enviar_texto", contato: 94, texto: "   " });
 ok(s === 400, "texto vazio recusado");

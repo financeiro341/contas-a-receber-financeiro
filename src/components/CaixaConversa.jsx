@@ -31,7 +31,8 @@ function lerRascunho(chave) { try { return sessionStorage.getItem(chave) || ''; 
 function guardarRascunho(chave, t) { try { if (t) sessionStorage.setItem(chave, t); else sessionStorage.removeItem(chave); } catch { /* sem armazenamento */ } }
 
 export default function CaixaConversa({ contato, eu, etiquetas, equipe, aoVoltar, aoMudar, recarregarEtiquetas }) {
-  const conv = useDados(() => lerConversaCompleta(contato), [contato], 10000);
+  const conv = useDados(() => lerConversaCompleta(contato), [contato], 5000);
+  const [saindo, setSaindo] = useState([]); // mensagens que estão saindo agora (aparecem na hora)
   const d = conv.dados;
   const [anteriores, setAnteriores] = useState([]);
   const [lendoAntigas, setLendoAntigas] = useState(false);
@@ -107,23 +108,29 @@ export default function CaixaConversa({ contato, eu, etiquetas, equipe, aoVoltar
   async function enviar() {
     const t = texto.trim();
     if (enviando || (!t && !arquivo)) return;
+    const provisoria = { id: `p${Date.now()}`, texto: t, arquivo: arquivo?.nome || null, em: new Date().toISOString() };
     setEnviando(true);
     setAviso(null);
+    setSaindo((x) => [...x, provisoria]);
+    setTexto('');
+    const anexado = arquivo;
+    setArquivo(null);
+    noFim.current = true;
+    requestAnimationFrame(() => { if (corpo.current) corpo.current.scrollTop = corpo.current.scrollHeight; });
     try {
-      if (arquivo) await enviarArquivo(contato, { ...arquivo, legenda: t });
+      if (anexado) await enviarArquivo(contato, { ...anexado, legenda: t });
       else await enviarTexto(contato, t);
-      setTexto('');
-      setArquivo(null);
-      noFim.current = true;
-      conv.atualizar();
+      await conv.atualizar();
       aoMudar?.();
-      // A mensagem volta pelo aviso da Evolution em alguns segundos.
-      setTimeout(() => conv.atualizar(), 2500);
-      setTimeout(() => conv.atualizar(), 6000);
+      // Os avisos de entregue e lida chegam em seguida.
+      setTimeout(() => conv.atualizar(), 3000);
     } catch (e) {
       setAviso(e.message);
-      conv.atualizar();
+      setTexto((atual) => atual || t);
+      if (anexado) setArquivo((atual) => atual || anexado);
+      await conv.atualizar();
     } finally {
+      setSaindo((x) => x.filter((m) => m.id !== provisoria.id));
       setEnviando(false);
       campo.current?.focus();
     }
@@ -191,7 +198,14 @@ export default function CaixaConversa({ contato, eu, etiquetas, equipe, aoVoltar
                     </Fragment>
                   );
                 })}
-                {(d.envios || []).filter((e) => e.status !== 'enviado').map((e) => (
+                {saindo.map((m) => (
+                  <div key={m.id} className="balao nos pendente" aria-live="polite">
+                    {m.arquivo && <span className="arquivo"><i className="ti ti-paperclip" aria-hidden="true" />{m.arquivo}</span>}
+                    {m.texto && <div><b>{eu?.assinatura}:</b>{'\n'}{m.texto}</div>}
+                    <span className="hora"><i className="ti ti-clock" aria-hidden="true" /> Enviando · {horaDe(m.em)}</span>
+                  </div>
+                ))}
+                {(d.envios || []).filter((e) => e.status !== 'enviado' && !(e.status === 'enviando' && saindo.length)).map((e) => (
                   <div key={`e${e.id}`} className={`balao nos pendente${e.status === 'erro' ? ' falhou' : ''}${e.status === 'incerto' ? ' incerto' : ''}`}>
                     {e.arquivo && <span className="arquivo"><i className="ti ti-paperclip" aria-hidden="true" />{e.arquivo}</span>}
                     {e.texto && <div>{e.texto}</div>}
