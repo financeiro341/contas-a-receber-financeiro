@@ -21,6 +21,11 @@ export default function QuemCobrar({ abrirNaCaixa }) {
   const [filtro, setFiltro] = useState('falta');
   const [busca, setBusca] = useState('');
   const [mostrar, setMostrar] = useState(POR_PAGINA);
+  // Recolher a lista (pedido do Marcus): a escolha fica guardada neste navegador.
+  const [recolhida, setRecolhida] = useState(() => { try { return localStorage.getItem('cr:quem-cobrar') === 'recolhida'; } catch { return false; } });
+  function alternar() {
+    setRecolhida((r) => { try { localStorage.setItem('cr:quem-cobrar', r ? 'aberta' : 'recolhida'); } catch { /* sem armazenamento */ } return !r; });
+  }
 
   async function carregar(atualizar) {
     setEstado((e) => (e?.dados ? { ...e, atualizando: true } : 'lendo'));
@@ -40,10 +45,19 @@ export default function QuemCobrar({ abrirNaCaixa }) {
   const somaFalta = useMemo(() => (d?.contatos || []).filter((x) => !x.falou_hoje).reduce((s, x) => s + Number(x.valor || 0), 0), [d]);
 
   return (
-    <section className="cartao bloco quem-cobrar" aria-labelledby="t-quem-cobrar">
-      <h2 id="t-quem-cobrar"><i className="ti ti-target-arrow" aria-hidden="true" />Quem cobrar hoje</h2>
-      <div className="sub">Clientes com honorários em atraso no Omie, do maior valor para o menor. "Falta cobrar" são os que ainda não receberam mensagem nossa hoje.</div>
+    <section className={`cartao bloco quem-cobrar${recolhida ? ' recolhida' : ''}`} aria-labelledby="t-quem-cobrar">
+      <div className="quem-cobrar-cabeca">
+        <div>
+          <h2 id="t-quem-cobrar"><i className="ti ti-target-arrow" aria-hidden="true" />Quem cobrar hoje{recolhida && d ? ` (${inteiro(contagem.falta)} a cobrar, ${brl(somaFalta)})` : ''}</h2>
+          <div className="sub">Clientes com honorários em atraso no Omie, do maior valor para o menor. "Falta cobrar" são os que ainda não receberam mensagem nossa hoje.</div>
+        </div>
+        <button type="button" className="botao icone" onClick={alternar} aria-expanded={!recolhida} aria-controls="quem-cobrar-corpo"
+          aria-label={recolhida ? 'Mostrar a lista Quem cobrar hoje' : 'Recolher a lista Quem cobrar hoje'} title={recolhida ? 'Mostrar' : 'Recolher'}>
+          <i className="ti ti-chevron-down" aria-hidden="true" />
+        </button>
+      </div>
 
+      <div id="quem-cobrar-corpo" hidden={recolhida}>
       {!estado && (
         <div className="quem-cobrar-inicio">
           <button type="button" className="botao principal" onClick={() => carregar(false)}><i className="ti ti-list-search" aria-hidden="true" />Montar a lista</button>
@@ -119,6 +133,7 @@ export default function QuemCobrar({ abrirNaCaixa }) {
           )}
         </>
       )}
+      </div>
     </section>
   );
 }
