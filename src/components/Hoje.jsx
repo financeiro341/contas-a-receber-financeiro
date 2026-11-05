@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { lerDia } from '../lib/api.js';
-import { NOME_SITUACAO, PAGARAM_OU_PROMETERAM } from '../constants.js';
+import { NOME_SITUACAO, ORDEM_SITUACAO, PAGARAM_OU_PROMETERAM } from '../constants.js';
 import { brl, inteiro, pct, plural } from '../utils/formato.js';
 import { Estado, Kpi, PilhaSituacoes, Vazio, baixarCsv, useDados } from './comum.jsx';
 
@@ -17,8 +17,12 @@ export default function Hoje({ dia, ehHoje, abrirConversa }) {
   const lig = r.ligacoes || {};
   const lista = useMemo(() => {
     const q = semAcento(busca);
+    // Ordem: pagou, prometeu, respondeu sem pagamento, não respondeu (ORDEM_SITUACAO); no mesmo grupo, a ordem do dia.
     return (dados?.clientes || []).filter((c) => (!filtro || c.situacao === filtro)
-      && (!q || semAcento(c.nome).includes(q) || (c.empresas || []).some((e) => semAcento(e).includes(q))));
+      && (!q || semAcento(c.nome).includes(q) || (c.empresas || []).some((e) => semAcento(e).includes(q))))
+      .map((c, i) => [c, i])
+      .sort(([a, i], [b, j]) => ((ORDEM_SITUACAO[a.situacao] ?? 99) - (ORDEM_SITUACAO[b.situacao] ?? 99)) || i - j)
+      .map(([c]) => c);
   }, [dados, filtro, busca]);
 
   function exportar() {

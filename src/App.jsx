@@ -29,13 +29,14 @@ function alternarTema() {
   try { localStorage.setItem('cr:tema', JSON.stringify({ tema: escuro ? 'claro' : 'escuro' })); } catch { /* sem armazenamento */ }
 }
 
-// Quantos clientes esperam resposta agora (contagem da aba Atendimento; só faz sentido hoje).
+// Na aba Atendimento: quantos clientes esperam resposta hoje com a última mensagem ainda não lida.
+// Quem já foi lido e não respondido fica fora do número (pode ser um "obrigado" que encerra a conversa).
 function ContagemEspera() {
   const { dados } = useDados(() => lerAtendimento(hoje()), [], 120000);
-  const lista = dados?.aguardando || [];
+  const lista = (dados?.aguardando || []).filter((c) => c.lida === false);
   if (!lista.length) return null;
   const atrasado = lista.some((c) => c.minutos > 60);
-  return <span className={`contador${atrasado ? ' atrasado' : ''}`} aria-label={`${lista.length} esperando resposta`}>{lista.length}</span>;
+  return <span className={`contador${atrasado ? ' atrasado' : ''}`} aria-label={`${lista.length} sem ler`} title={`${lista.length} ${lista.length > 1 ? 'mensagens' : 'mensagem'} de cliente sem ler`}>{lista.length}</span>;
 }
 
 function SeletorDia({ dia, setDia }) {

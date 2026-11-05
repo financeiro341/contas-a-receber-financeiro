@@ -9,6 +9,7 @@ export default function Atendimento({ dia, ehHoje, abrirConversa }) {
   const { dados: a, erro, carregando, em, recarregar } = useDados(() => lerAtendimento(dia), [dia], ehHoje ? 120000 : 0);
   const f = a?.faixas || {};
   const totalFaixas = (a?.blocos || 0);
+  const semLer = (a?.aguardando || []).filter((c) => c.lida === false).length;
   const FAIXAS = [['ate_15', 'Até 15 min'], ['ate_60', '15 min a 1 h'], ['ate_240', '1 h a 4 h'], ['mais_240', 'Mais de 4 h'], ['sem_resposta', 'Sem resposta']];
   const horas = a?.por_hora || [];
   // Eixo de 8h às 18h, alargado só se houve mensagem antes ou depois (até 7h e 19h).
@@ -30,15 +31,22 @@ export default function Atendimento({ dia, ehHoje, abrirConversa }) {
           <div className="grade g-lado">
             <section className="cartao destaque" aria-labelledby="t-espera">
               <h2 id="t-espera"><i className="ti ti-user-exclamation" aria-hidden="true" />Esperando resposta ({a.aguardando.length})</h2>
-              <div className="sub">A última mensagem é do cliente{ehHoje ? '; a mais antiga primeiro' : ' (como o dia terminou)'}.</div>
+              <div className="sub">
+                A última mensagem é do cliente{ehHoje ? '' : ' (como o dia terminou)'}. Primeiro as que ninguém abriu, a mais antiga no topo.
+                {semLer > 0 && <> <b style={{ color: 'var(--text-primary)' }}>{semLer} sem ler.</b></>}
+              </div>
               {a.aguardando.length === 0 ? <Vazio icone="ti-circle-check" titulo="Ninguém esperando resposta" texto={ehHoje ? 'Todas as conversas de hoje estão respondidas.' : 'O dia terminou sem cliente esperando.'} /> : (
                 <ul className="fila" tabIndex={a.aguardando.length > 6 ? 0 : undefined} aria-label="Clientes esperando resposta">
                   {a.aguardando.map((c) => (
-                    <li key={c.contato_id}>
+                    <li key={c.contato_id} className={c.lida ? 'lida' : undefined}>
                       <button type="button" onClick={() => abrirConversa(c.contato_id)}>
                         <span className={`espera ${tomEspera(c.minutos)}`}>{ehHoje ? minutos(c.minutos) : c.desde}</span>
                         <span style={{ minWidth: 0 }}><span className="quem">{c.nome}</span><span className="texto" style={{ display: 'block' }}>{c.texto.trim() || 'Arquivo ou mídia'}</span></span>
-                        <span className="desde">desde {c.desde}</span>
+                        <span className="desde">
+                          {c.lida === false && <span className="marca-leitura nao-lida"><i className="ti ti-mail" aria-hidden="true" />Sem ler</span>}
+                          {c.lida === true && <span className="marca-leitura"><i className="ti ti-checks" aria-hidden="true" />Lida</span>}
+                          <span>desde {c.desde}</span>
+                        </span>
                       </button>
                     </li>
                   ))}
