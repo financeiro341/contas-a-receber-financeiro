@@ -53,7 +53,7 @@ function BaixarRelatorio({ eu, aoCalcular }) {
       <span className="mini" role="status" aria-live="polite">
         {estado === 'omie' ? 'Calculando os números de hoje no Omie. Pode levar até 1 minuto.'
           : estado?.erro ? <span className="texto-erro">{estado.erro}</span>
-            : estado?.ok ? estado.ok : 'PDF no modelo do relatório diário, com a cobrança de hoje e o Omie calculado na hora.'}
+            : estado?.ok ? estado.ok : ''}
       </span>
     </div>
   );
