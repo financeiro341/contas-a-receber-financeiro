@@ -104,7 +104,8 @@ async function conferir(token: string): Promise<Usuario | null> {
     papel: perfil.role,
     setor: perfil.sector,
     podeEnviar: perfil.role === "admin" || !!at?.pode_enviar,
-    assinatura: at?.assinatura || `${nome} - Dep. Financeiro`,
+    // Sem linha em atendentes: quem é da diretoria assina "Diretoria Castelo"; os outros, nome e setor.
+    assinatura: at?.assinatura || (perfil.sector === "diretoria" ? "Diretoria Castelo" : `${nome} - Dep. Financeiro`),
     token,
   };
   cache.set(token, { ate: Date.now() + 60_000, usuario });
