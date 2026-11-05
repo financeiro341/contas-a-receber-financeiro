@@ -51,7 +51,7 @@ function ContagemSemLer({ aoContar, aoAbrir }) {
       if (novas.length) {
         try {
           const aviso = new Notification(novas.length > 1 ? `${novas.length} mensagens novas de clientes` : `Mensagem nova de ${novas[0].nome}`, {
-            body: novas.length > 1 ? novas.map((c) => c.nome).slice(0, 4).join(', ') : (novas[0].ultima_texto || ''), tag: 'cr-caixa', icon: '/favicon.svg',
+            body: novas.length > 1 ? novas.map((c) => c.nome).slice(0, 4).join(', ') : (novas[0].ultima_texto || ''), tag: 'cr-caixa', icon: '/apple-touch-icon.png',
           });
           aviso.onclick = () => { window.focus(); aoAbrir?.(novas[0].contato_id); aviso.close(); };
         } catch { /* navegador sem aviso */ }
