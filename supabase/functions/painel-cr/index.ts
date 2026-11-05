@@ -1,6 +1,6 @@
 // Função painel-cr (projeto whatsapp-financeiro): entrega as métricas ao sistema do contas a receber
 // e, desde a fase 2 (05/11/2026), a caixa de entrada: responder em texto e arquivo pela Evolution,
-// notas internas, etiquetas e dono da conversa.
+// notas internas, etiquetas, dono da conversa, conversa resolvida, retornos e ligações registradas.
 // Login: o mesmo do Painel de Demandas. O token do usuário é conferido no Supabase do Painel
 // (produção): entra quem é admin ou do setor financeiro ou diretoria. Envia mensagem só quem é admin
 // ou está na tabela atendentes com pode_enviar (decisão do Marcus: Maria Clara e os administradores).
@@ -473,6 +473,90 @@ async function tratarPost(u: Usuario, corpo: any) {
       await rest(`respostas_prontas?id=eq.${id}`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ apagada_em: new Date().toISOString() }) });
       return { ok: true };
     }
+    case "resolver": {
+      // Conversa resolvida: sai de "Esperando" e da fila do Atendimento até o cliente escrever de novo.
+      const contato = inteiro(corpo.contato, "Contato");
+      const resolvida = corpo.resolvida === true;
+      if (!(await rest(`contatos?select=id&id=eq.${contato}`))[0]) throw new Erro(404, "Contato não encontrado.");
+      if (resolvida) {
+        await rest("resolucoes?on_conflict=contato_id", {
+          method: "POST",
+          headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+          body: JSON.stringify({ contato_id: contato, usuario_id: u.id, usuario_nome: u.nome, em: new Date().toISOString() }),
+        });
+      } else {
+        await rest(`resolucoes?contato_id=eq.${contato}`, { method: "DELETE", headers: { Prefer: "return=minimal" } });
+      }
+      await evento(contato, u, resolvida ? "resolveu" : "reabriu", {});
+      return { ok: true };
+    }
+    case "lembrete_criar": {
+      const contato = inteiro(corpo.contato, "Contato");
+      const dia = String(corpo.dia || "");
+      if (!DATA.test(dia) || Number.isNaN(Date.parse(dia))) throw new Erro(400, "Escolha a data do retorno.");
+      const hoje = hojeBrasil();
+      const limite = new Date(Date.parse(hoje) + 366 * 86400_000).toISOString().slice(0, 10);
+      if (dia < hoje) throw new Erro(400, "A data do retorno não pode ser no passado.");
+      if (dia > limite) throw new Erro(400, "Escolha uma data dentro de um ano.");
+      const hora = corpo.hora ? String(corpo.hora) : null;
+      if (hora && !/^([01]\d|2[0-3]):[0-5]\d$/.test(hora)) throw new Erro(400, "Hora inválida.");
+      const texto = String(corpo.texto ?? "").trim().slice(0, 500) || null;
+      const existe = (await rest(`contatos?select=id&id=eq.${contato}`))[0];
+      if (!existe) throw new Erro(404, "Contato não encontrado.");
+      const [l] = await rest("lembretes", { method: "POST", body: JSON.stringify({ contato_id: contato, dia, hora, texto, usuario_id: u.id, usuario_nome: u.nome }) });
+      await evento(contato, u, "retorno_marcado", { dia, hora: hora ?? undefined });
+      return { ok: true, id: l.id };
+    }
+    case "lembrete_feito":
+    case "lembrete_cancelar": {
+      const id = inteiro(corpo.id, "Retorno");
+      const l = (await rest(`lembretes?select=id,contato_id,usuario_id,feito_em,cancelado_em,dia&id=eq.${id}`))[0];
+      if (!l || l.cancelado_em) throw new Erro(404, "Retorno não encontrado.");
+      const agora = new Date().toISOString();
+      if (acao === "lembrete_feito") {
+        if (l.feito_em) return { ok: true };
+        await rest(`lembretes?id=eq.${id}&feito_em=is.null`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ feito_em: agora, feito_por: u.id, feito_por_nome: u.nome }) });
+        await evento(l.contato_id, u, "retorno_feito", { dia: l.dia });
+      } else {
+        if (l.usuario_id !== u.id && u.papel !== "admin") throw new Erro(403, "Só quem marcou o retorno ou um administrador cancela.");
+        if (l.feito_em) throw new Erro(400, "Este retorno já foi feito e não pode ser cancelado.");
+        await rest(`lembretes?id=eq.${id}&feito_em=is.null&cancelado_em=is.null`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ cancelado_em: agora, cancelado_por: u.id }) });
+        await evento(l.contato_id, u, "retorno_cancelado", { dia: l.dia });
+      }
+      return { ok: true };
+    }
+    case "ligacao_registrar": {
+      // Contagem oficial das ligações (decisão do Marcus): quem ligou registra aqui; a leitura do Chrome confere.
+      const contato = inteiro(corpo.contato, "Contato");
+      const direcao = corpo.direcao === "recebida" ? "recebida" : "feita";
+      const resultado = corpo.resultado === "atendida" ? "atendida" : "nao_atendida";
+      const observacao = String(corpo.observacao ?? "").trim().slice(0, 500) || null;
+      const existe = (await rest(`contatos?select=id&id=eq.${contato}`))[0];
+      if (!existe) throw new Erro(404, "Contato não encontrado.");
+      // Evita o clique duplo: uma ligação por pessoa e contato a cada minuto.
+      const desde = new Date(Date.now() - 60_000).toISOString();
+      const recente = await rest(`ligacoes?select=id&fonte=eq.manual&anulada_em=is.null&contato_id=eq.${contato}&usuario_id=eq.${encodeURIComponent(u.id)}&iniciada_em=gte.${encodeURIComponent(desde)}&limit=1`);
+      if (recente.length) throw new Erro(429, "Você já registrou uma ligação para este contato agora há pouco.");
+      const [l] = await rest("ligacoes", {
+        method: "POST",
+        body: JSON.stringify({
+          id_chamada: `manual-${crypto.randomUUID()}`, contato_id: contato, direcao, resultado, fonte: "manual",
+          iniciada_em: new Date().toISOString(), usuario_id: u.id, usuario_nome: u.nome, observacao,
+        }),
+      });
+      await evento(contato, u, "ligacao", { direcao, resultado });
+      return { ok: true, id: l.id };
+    }
+    case "ligacao_anular": {
+      const id = inteiro(corpo.id, "Ligação");
+      const l = (await rest(`ligacoes?select=id,contato_id,fonte,usuario_id,anulada_em&id=eq.${id}`))[0];
+      if (!l || l.anulada_em) throw new Erro(404, "Ligação não encontrada.");
+      if (l.fonte !== "manual") throw new Erro(400, "Só a ligação registrada no sistema pode ser desfeita.");
+      if (l.usuario_id !== u.id && u.papel !== "admin") throw new Erro(403, "Só quem registrou ou um administrador desfaz.");
+      await rest(`ligacoes?id=eq.${id}&fonte=eq.manual&anulada_em=is.null`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ anulada_em: new Date().toISOString(), anulada_por: u.id }) });
+      await evento(l.contato_id, u, "ligacao_desfeita", {});
+      return { ok: true };
+    }
     default:
       throw new Erro(400, "Ação desconhecida.");
   }
@@ -527,7 +611,10 @@ Deno.serve(async (req) => {
         const contato = inteiro(u.searchParams.get("contato"), "Contato");
         const antes = u.searchParams.get("antes");
         if (antes && Number.isNaN(Date.parse(antes))) return json({ erro: "Data inválida." }, 400, h);
-        return json(await rpc("painel_conversa_completa", { p_contato: contato, p_antes: antes || null, p_limite: 120 }), 200, h);
+        const conversa = rpc("painel_conversa_completa", { p_contato: contato, p_antes: antes || null, p_limite: 120 });
+        if (antes) return json(await conversa, 200, h);
+        const [c, extras] = await Promise.all([conversa, rpc("painel_conversa_extras", { p_contato: contato })]);
+        return json({ ...c, ...extras }, 200, h);
       }
       case "etiquetas":
         return json(await rest("etiquetas?select=id,nome,cor&apagada_em=is.null&order=nome"), 200, h);

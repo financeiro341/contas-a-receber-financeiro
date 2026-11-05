@@ -1,11 +1,12 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { buscarHistorico, enviarArquivo, enviarTexto, lerConversaCompleta, marcarLida } from '../lib/api.js';
+import { buscarHistorico, enviarArquivo, enviarTexto, lerConversaCompleta, marcarLida, retornoFeito } from '../lib/api.js';
 import { NOME_SITUACAO } from '../constants.js';
-import { diaDe, horaDe, rotuloDia, tamanhoArquivo } from '../utils/formato.js';
+import { diaDe, hoje, horaDe, rotuloDia, tamanhoArquivo } from '../utils/formato.js';
 import { Estado, Vazio, useDados } from './comum.jsx';
 import { Iniciais } from './CaixaLista.jsx';
 import CaixaDetalhes from './CaixaDetalhes.jsx';
 import RespostasProntas, { preencher } from './RespostasProntas.jsx';
+import AcoesConversa, { rotuloRetorno } from './AcoesConversa.jsx';
 
 const ICONE_ARQUIVO = { documentMessage: 'ti-file-text', imageMessage: 'ti-photo', audioMessage: 'ti-microphone', videoMessage: 'ti-video', stickerMessage: 'ti-mood-smile' };
 const ACEITOS = '.pdf,.jpg,.jpeg,.png,.xlsx,.xls,.docx,.doc,.csv,.txt,.zip';
@@ -52,8 +53,11 @@ export default function CaixaConversa({ contato, eu, etiquetas, equipe, aoVoltar
   const marcadas = useRef('');
   const [painelRespostas, setPainelRespostas] = useState(null); // null fechado; string = filtro
   const [historico, setHistorico] = useState(null); // null, 'lendo' ou { novas }
+  const [confirmacao, setConfirmacao] = useState('');
+  const [baixando, setBaixando] = useState(false);
 
   useEffect(() => { guardarRascunho(rascunho, texto); }, [rascunho, texto]);
+  useEffect(() => { if (!confirmacao) return undefined; const t = setTimeout(() => setConfirmacao(''), 6000); return () => clearTimeout(t); }, [confirmacao]);
   useEffect(() => { if (window.innerWidth > 1280) { try { localStorage.setItem('cr:detalhes', detalhes ? 's' : 'n'); } catch { /* sem armazenamento */ } } }, [detalhes]);
 
   const vistas = new Set();
@@ -204,6 +208,14 @@ export default function CaixaConversa({ contato, eu, etiquetas, equipe, aoVoltar
   const s = d?.situacao;
   const podeResponder = eu?.pode_enviar && eu?.envio_ligado && c?.tem_destino;
   const mais = maisAntigas ?? d?.mais_antigas;
+  const resolvida = !!d?.resolucao?.vale;
+  const retornos = (d?.lembretes || []).filter((l) => !l.feito);
+  const mudou = () => { conv.atualizar(); aoMudar?.(); };
+  const avisar = (msg, ehErro) => { if (ehErro) { setAviso(msg); setConfirmacao(''); } else { setConfirmacao(msg); setAviso(null); } };
+  async function concluirRetorno(id) {
+    setBaixando(true);
+    try { await retornoFeito(id); avisar('Retorno marcado como feito.'); mudou(); } catch (e) { avisar(e.message, true); } finally { setBaixando(false); }
+  }
   let diaAnterior = null;
 
   return (
@@ -219,12 +231,26 @@ export default function CaixaConversa({ contato, eu, etiquetas, equipe, aoVoltar
           </div>
         </div>
         {d?.dono && <span className="dono-topo"><i className="ti ti-user" aria-hidden="true" />{d.dono.id === eu?.id ? 'Você' : d.dono.nome}</span>}
+        {d && <AcoesConversa contato={contato} resolvida={resolvida} aoMudar={mudou} aoAvisar={avisar} />}
         <button type="button" className="botao icone" aria-pressed={detalhes} onClick={() => setDetalhes(!detalhes)} aria-label={detalhes ? 'Esconder detalhes' : 'Mostrar detalhes'} title="Detalhes, notas e etiquetas">
           <i className="ti ti-layout-sidebar-right" aria-hidden="true" />
         </button>
       </header>
 
       <div className="conversa-meio">
+        {(confirmacao || retornos.length > 0 || resolvida) && (
+          <div className="faixas-conversa">
+            {confirmacao && <div className="aviso ok" role="status"><i className="ti ti-circle-check" aria-hidden="true" /><span style={{ flex: 1 }}>{confirmacao}</span></div>}
+            {retornos.map((r) => (
+              <div key={r.id} className={`faixa-retorno${r.dia < hoje() ? ' atrasado' : r.dia > hoje() ? ' futuro' : ''}`}>
+                <i className="ti ti-alarm" aria-hidden="true" />
+                <span className="txt"><b>Retorno {rotuloRetorno(r)}</b>{r.texto ? `: ${r.texto}` : ''} <span className="mini">· marcado por {r.por.split(' ')[0]}</span></span>
+                <button type="button" className="botao" disabled={baixando} onClick={() => concluirRetorno(r.id)}><i className="ti ti-check" aria-hidden="true" />Feito</button>
+              </div>
+            ))}
+            {resolvida && !confirmacao && <div className="faixa-resolvida"><i className="ti ti-circle-check" aria-hidden="true" />Resolvida por {d.resolucao.por.split(' ')[0]} · volta para Esperando se o cliente escrever.</div>}
+          </div>
+        )}
         <div className="conversa-corpo" ref={corpo} onScroll={aoRolar}>
           <Estado carregando={conv.carregando && !d} erro={!d && conv.erro} recarregar={conv.recarregar} forma="conversa">
             {d && (
@@ -331,7 +357,7 @@ export default function CaixaConversa({ contato, eu, etiquetas, equipe, aoVoltar
       {detalhes && d && (
         <CaixaDetalhes contato={contato} dados={d} eu={eu} etiquetas={etiquetas} equipe={equipe}
           aoFechar={() => setDetalhes(false)}
-          aoMudar={() => { conv.atualizar(); aoMudar?.(); }} recarregarEtiquetas={recarregarEtiquetas} />
+          aoMudar={mudou} recarregarEtiquetas={recarregarEtiquetas} />
       )}
     </section>
   );

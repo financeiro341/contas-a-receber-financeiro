@@ -48,6 +48,14 @@ globalThis.fetch = async (input: any, init: any = {}) => {
   if (url.includes("/rest/v1/mensagens?id=in.") && metodo === "PATCH") { db.lidas = url; return new Response(null, { status: 204 }); }
   if (url.includes("/rest/v1/mensagens?on_conflict=id&select=id")) { const l = JSON.parse(init.body); db.historico = l; return resp(l.map((x: any) => ({ id: x.id })), 201); }
   if (url.includes("/rest/v1/respostas_prontas") && metodo === "POST") return resp([{ id: 5 }], 201);
+  if (url.includes("/rest/v1/resolucoes")) { db.resolucoes = [...(db.resolucoes || []), { metodo, url, corpo: init.body }]; return new Response(null, { status: metodo === "DELETE" ? 204 : 201 }); }
+  if (url.includes("/rest/v1/lembretes") && metodo === "POST") { const l = { id: 11, ...JSON.parse(init.body) }; db.lembretes = [l]; return resp([l], 201); }
+  if (url.includes("/rest/v1/lembretes?select")) return resp(db.lembretes ? [{ feito_em: null, cancelado_em: null, ...db.lembretes[0] }] : []);
+  if (url.includes("/rest/v1/lembretes?id=eq") && metodo === "PATCH") { db.lembrete_patch = JSON.parse(init.body); return new Response(null, { status: 204 }); }
+  if (url.includes("/rest/v1/ligacoes") && metodo === "POST") { const l = { id: 21, ...JSON.parse(init.body) }; db.ligacoes = [l]; return resp([l], 201); }
+  if (url.includes("/rest/v1/ligacoes?select=id&fonte=eq.manual")) return resp(db.ligacaoRecente ? [{ id: 21 }] : []);
+  if (url.includes("/rest/v1/ligacoes?select")) return resp(db.ligacoes ? [{ ...db.ligacoes[0], anulada_em: null }] : []);
+  if (url.includes("/rest/v1/ligacoes?id=eq") && metodo === "PATCH") { db.ligacao_patch = JSON.parse(init.body); return new Response(null, { status: 204 }); }
   if (url.includes("api-evolution.iapessoas.com.br") && evoDemora) { const e = new Error("abortado"); e.name = "AbortError"; throw e; }
   if (url.includes("api-evolution.iapessoas.com.br")) return evoStatus < 300 ? resp({ key: { id: "MSG123", fromMe: true }, status: "PENDING" }, evoStatus) : resp({ status: 400, response: { message: [{ exists: false, number: "x" }] } }, evoStatus);
   return resp({ desconhecido: url }, 599);
@@ -108,9 +116,43 @@ ok(s === 200 && b.id === 5, "resposta pronta criada");
 [s, b] = await post({ acao: "nota", contato: 94, texto: "Prometeu pagar sexta" });
 ok(s === 200 && db.notas[0].usuario_nome === "Maria Clara", "nota gravada");
 
+[s, b] = await post({ acao: "resolver", contato: 94, resolvida: true });
+ok(s === 200 && db.resolucoes[0].metodo === "POST" && JSON.parse(db.resolucoes[0].corpo).usuario_nome === "Maria Clara", "conversa resolvida");
+[s, b] = await post({ acao: "resolver", contato: 94, resolvida: false });
+ok(s === 200 && db.resolucoes[1].metodo === "DELETE", "conversa reaberta");
+[s, b] = await post({ acao: "lembrete_criar", contato: 94, dia: "2020-01-01" });
+ok(s === 400, "retorno no passado recusado");
+[s, b] = await post({ acao: "lembrete_criar", contato: 94, dia: "2099-01-01" });
+ok(s === 400, "retorno longe demais recusado");
+const amanha = new Date(Date.now() + 2 * 86400_000).toISOString().slice(0, 10);
+[s, b] = await post({ acao: "lembrete_criar", contato: 94, dia: amanha, hora: "25:00" });
+ok(s === 400, "hora inválida recusada");
+[s, b] = await post({ acao: "lembrete_criar", contato: 94, dia: amanha, hora: "09:30", texto: "Ver se pagou" });
+ok(s === 200 && db.lembretes[0].hora === "09:30" && db.lembretes[0].usuario_nome === "Maria Clara", "retorno marcado");
+[s, b] = await post({ acao: "lembrete_feito", id: 11 });
+ok(s === 200 && db.lembrete_patch.feito_por_nome === "Maria Clara", "retorno feito");
+[s, b] = await post({ acao: "ligacao_registrar", contato: 94, direcao: "feita", resultado: "atendida", observacao: "Disse que paga sexta" });
+ok(s === 200 && db.ligacoes[0].fonte === "manual" && db.ligacoes[0].id_chamada.startsWith("manual-") && db.ligacoes[0].usuario_id === "u-maria", "ligação registrada");
+[s, b] = await post({ acao: "ligacao_registrar", contato: 94, direcao: "qualquer", resultado: "x" });
+ok(s === 200 && db.ligacoes[0].direcao === "feita" && db.ligacoes[0].resultado === "nao_atendida", "ligação com valores fora da lista cai no padrão");
+db.ligacaoRecente = true;
+[s, b] = await post({ acao: "ligacao_registrar", contato: 94, direcao: "feita", resultado: "atendida" });
+ok(s === 429, "clique duplo na ligação recusado");
+db.ligacaoRecente = false;
+[s, b] = await post({ acao: "resolver", contato: 94, resolvida: "false" });
+ok(s === 200 && db.resolucoes.at(-1).metodo === "DELETE", "\"false\" em texto não resolve");
+db.lembretes[0].feito_em = "2026-11-05T15:00:00Z";
+[s, b] = await post({ acao: "lembrete_cancelar", id: 11 });
+ok(s === 400, "retorno já feito não se cancela");
+db.lembretes[0].feito_em = null;
+
 perfil = { first_name: "Olavio", last_name: "Santos", role: "financeiro", sector: "financeiro" };
 const r2 = await fetch("http://fn/", { method: "POST", headers: { Authorization: "Bearer outro", "Content-Type": "application/json" }, body: JSON.stringify({ acao: "enviar_texto", contato: 94, texto: "oi" }) });
 ok(r2.status === 403, "Olavio não envia " + r2.status);
+const r7 = await fetch("http://fn/", { method: "POST", headers: { Authorization: "Bearer outro", "Content-Type": "application/json" }, body: JSON.stringify({ acao: "ligacao_anular", id: 21 }) });
+ok(r7.status === 403 && !db.ligacao_patch, "Olavio não desfaz a ligação da Maria Clara");
+const r8 = await fetch("http://fn/", { method: "POST", headers: { Authorization: "Bearer outro", "Content-Type": "application/json" }, body: JSON.stringify({ acao: "lembrete_cancelar", id: 11 }) });
+ok(r8.status === 403, "Olavio não cancela o retorno da Maria Clara");
 const r2b = await fetch("http://fn/", { method: "POST", headers: { Authorization: "Bearer outro", "Content-Type": "application/json" }, body: JSON.stringify({ acao: "marcar_lida", contato: 94 }) });
 const j2b = await r2b.json();
 ok(r2b.status === 200 && j2b.marcadas === 0 && marcadas.length === 1, "Olavio abre a conversa sem marcar como lida");
@@ -119,6 +161,7 @@ const eu = await r3.json();
 ok(eu.usuario.pode_enviar === false && eu.usuario.envio_ligado === true, "eu do Olavio");
 
 perfil = { first_name: "Maria", last_name: "Clara", role: "financeiro", sector: "financeiro" };
+{ const [s9] = await post({ acao: "ligacao_anular", id: 21 }); ok(s9 === 200 && db.ligacao_patch.anulada_por === "u-maria", "Maria Clara desfaz a própria ligação"); }
 senhaEmDia = false;
 const r6 = await fetch("http://fn/?acao=eu", { headers: { Authorization: "Bearer senha-pendente" } });
 ok(r6.status === 401, "senha ainda não trocada não entra");

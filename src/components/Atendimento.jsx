@@ -10,7 +10,9 @@ export default function Atendimento({ dia, ehHoje, abrirConversa }) {
   const f = a?.faixas || {};
   const totalFaixas = (a?.blocos || 0);
   const semLer = (a?.aguardando || []).filter((c) => c.lida === false).length;
-  const FAIXAS = [['ate_15', 'Até 15 min'], ['ate_60', '15 min a 1 h'], ['ate_240', '1 h a 4 h'], ['mais_240', 'Mais de 4 h'], ['sem_resposta', 'Sem resposta']];
+  const FAIXAS = [['ate_15', 'Até 15 min'], ['ate_60', '15 min a 1 h'], ['ate_240', '1 h a 4 h'], ['mais_240', 'Mais de 4 h'], ['sem_resposta', 'Sem resposta'], ['encerradas', 'Resolvidas']];
+  const pessoas = a?.por_pessoa || [];
+  const semNome = pessoas.some((p) => p.nome === 'WhatsApp Web' || p.nome === 'WhatsApp no celular');
   const horas = a?.por_hora || [];
   // Eixo de 8h às 18h, alargado só se houve mensagem antes ou depois (até 7h e 19h).
   const comDados = horas.filter((x) => x.hora >= 7 && x.hora <= 19 && x.cliente + x.nos > 0).map((x) => x.hora);
@@ -81,16 +83,46 @@ export default function Atendimento({ dia, ehHoje, abrirConversa }) {
               <h2 id="t-faixas"><i className="ti ti-stopwatch" aria-hidden="true" />Tempo até a primeira resposta</h2>
               <div className="sub">Cada vez que o cliente escreveu, quanto tempo levamos para responder.</div>
               <div style={{ marginTop: 10 }}>
-                {FAIXAS.map(([k, rot]) => (
+                {FAIXAS.filter(([k]) => k !== 'encerradas' || f[k]).map(([k, rot]) => (
                   <div className="faixa-h" key={k}>
                     <span>{rot}</span>
-                    <span className="trilha" aria-hidden="true"><i style={{ width: pct(f[k] || 0, totalFaixas), background: k === 'sem_resposta' ? 'var(--danger)' : undefined }} /></span>
+                    <span className="trilha" aria-hidden="true"><i style={{ width: pct(f[k] || 0, totalFaixas), background: k === 'sem_resposta' ? 'var(--danger)' : k === 'encerradas' ? 'var(--text-muted)' : undefined }} /></span>
                     <b>{inteiro(f[k] || 0)}</b>
                   </div>
                 ))}
               </div>
             </section>
           </div>
+
+          <section className="cartao bloco" aria-labelledby="t-pessoas">
+            <h2 id="t-pessoas"><i className="ti ti-users" aria-hidden="true" />Por pessoa</h2>
+            <div className="sub">
+              Quem deu a primeira resposta cada vez que o cliente escreveu, e em quanto tempo.
+              {semNome && ' O que sai direto pelo WhatsApp não diz quem enviou: aparece como WhatsApp Web ou celular. Respondendo pelo sistema, entra o nome.'}
+            </div>
+            {pessoas.length === 0 ? <Vazio icone="ti-user-off" titulo="Ninguém respondeu cliente neste dia" /> : (
+              <div className="rolagem">
+                <table className="tabela em-cartoes tabela-pessoas">
+                  <thead><tr><th>Quem</th><th className="num">Respostas</th><th className="num">Tempo (mediana)</th><th className="num">Até 15 min</th><th className="num">Mensagens enviadas</th><th className="num">Ligações registradas</th></tr></thead>
+                  <tbody>
+                    {pessoas.map((p) => {
+                      const semPessoa = p.nome === 'WhatsApp Web' || p.nome === 'WhatsApp no celular';
+                      return (
+                        <tr key={p.nome}>
+                          <td><span className="nome">{semPessoa ? <><i className={`ti ${p.nome === 'WhatsApp Web' ? 'ti-device-desktop' : 'ti-device-mobile'}`} aria-hidden="true" /> {p.nome}</> : p.nome}</span>{semPessoa && <div className="empresa">Sem o nome de quem enviou</div>}</td>
+                          <td className="num" data-rotulo="Respostas">{inteiro(p.respostas)}</td>
+                          <td className="num" data-rotulo="Tempo (mediana)">{p.respostas ? <><b style={{ color: 'var(--text-primary)' }}>{minutos(p.mediana_min)}</b><div className="empresa">média {minutos(p.media_min)}</div></> : '—'}</td>
+                          <td className="num" data-rotulo="Até 15 min">{p.respostas ? pct(p.ate_15, p.respostas) : '—'}</td>
+                          <td className="num" data-rotulo="Mensagens enviadas">{inteiro(p.enviadas)}</td>
+                          <td className="num" data-rotulo="Ligações registradas">{semPessoa ? '—' : p.ligacoes ? `${inteiro(p.ligacoes)} (${inteiro(p.lig_atendidas)} atendidas)` : '0'}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
         </>
       )}
     </Estado>

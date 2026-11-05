@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react';
 import { lerDia } from '../lib/api.js';
 import { NOME_SITUACAO, ORDEM_SITUACAO, PAGARAM_OU_PROMETERAM } from '../constants.js';
-import { brl, inteiro, pct, plural } from '../utils/formato.js';
+import { brl, dataCurta, inteiro, pct, plural } from '../utils/formato.js';
 import { Estado, Kpi, PilhaSituacoes, Vazio, baixarCsv, useDados } from './comum.jsx';
 
 const semAcento = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
-export default function Hoje({ dia, ehHoje, abrirConversa }) {
+export default function Hoje({ dia, ehHoje, abrirConversa, abrirNaCaixa }) {
   const { dados, erro, carregando, em, recarregar } = useDados(() => lerDia(dia), [dia], ehHoje ? 120000 : 0);
   const [filtro, setFiltro] = useState(null);
   const [busca, setBusca] = useState('');
@@ -57,9 +57,30 @@ export default function Hoje({ dia, ehHoje, abrirConversa }) {
             <Kpi icone="ti-message-check" rotulo="Responderam" valor={inteiro(r.responderam)} apoio={`${pct(r.responderam, r.cobrados)} dos cobrados`} />
             <Kpi icone="ti-message-off" tom={r.sem_resposta ? "atencao" : undefined} rotulo="Sem resposta" valor={inteiro(r.sem_resposta)} apoio="Contando só boleto e sem retorno" />
             <Kpi icone="ti-cash" tom={pp ? "bom" : undefined} rotulo="Pagaram ou prometeram" valor={inteiro(pp)} apoio={`${inteiro((ps.pagou || 0) + (ps.pagou_parcial || 0))} com pagamento`} />
-            <Kpi icone="ti-phone" rotulo="Ligações" valor={inteiro(lig.total)} apoio={`${inteiro(lig.atendidas)} atendidas · ${lig.fonte === 'chrome' ? 'lidas no Chrome' : 'só as recebidas'}`} />
+            <Kpi icone="ti-phone" rotulo="Ligações" valor={inteiro(lig.total)} apoio={`${inteiro(lig.atendidas)} atendidas · ${lig.fonte === 'sistema' ? `${inteiro(lig.registradas)} pelo sistema${lig.automaticas ? `, ${inteiro(lig.automaticas)} lidas no WhatsApp` : ''}` : lig.fonte === 'chrome' ? 'lidas no WhatsApp Web' : 'só as recebidas'}`} />
             <Kpi icone="ti-alert-circle" rotulo="Em atraso no Omie" dinheiro valor={r.atraso_total == null ? '—' : brl(r.atraso_total)} apoio={r.atraso_total == null ? 'Entra com o relatório das 17h30' : 'Soma dos clientes cobrados'} />
           </section>
+
+          {(dados.retornos || []).length > 0 && (
+            <section className="cartao bloco" aria-labelledby="t-retornos">
+              <h2 id="t-retornos"><i className="ti ti-alarm" aria-hidden="true" />Retornos {ehHoje ? 'de hoje' : 'do dia'} ({dados.retornos.filter((x) => !x.feito).length} {plural(dados.retornos.filter((x) => !x.feito).length, 'pendente', 'pendentes')})</h2>
+              <div className="sub">Clientes com retorno marcado na conversa{ehHoje ? ', mais os atrasados' : ''}. Abra a conversa e marque como feito.</div>
+              <ul className="fila lista-retornos" aria-label="Retornos">
+                {dados.retornos.map((x) => (
+                  <li key={x.id} className={x.feito ? 'lida' : undefined}>
+                    <button type="button" onClick={() => abrirNaCaixa(x.contato_id)}>
+                      <span className={`espera ${x.feito ? 'ok' : x.atrasado ? 'atraso' : 'atencao'}`}>{x.feito ? 'Feito' : x.atrasado ? `Desde ${dataCurta(x.dia)}` : (x.hora || 'Hoje')}</span>
+                      <span style={{ minWidth: 0 }}>
+                        <span className="quem">{x.nome}</span>
+                        <span className="texto" style={{ display: 'block' }}>{(x.empresas || [])[0] ? `${x.empresas[0]} · ` : ''}{x.texto || 'Sem observação'}</span>
+                      </span>
+                      <span className="desde">{x.feito ? `por ${String(x.feito_por || '').split(' ')[0]}` : `marcado por ${String(x.por).split(' ')[0]}`}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
 
           <section className="cartao bloco" aria-labelledby="t-situacao">
             <h2 id="t-situacao"><i className="ti ti-chart-bar" aria-hidden="true" />Situação dos clientes cobrados</h2>

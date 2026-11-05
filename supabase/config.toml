@@ -3,3 +3,7 @@
 # o login no Painel (auth/v1/user, perfil e senha_em_dia) antes de responder.
 [functions.painel-cr]
 verify_jwt = false
+
+# Webhook da Evolution: autenticação própria por ?token= (sha256 em public.configuracao).
+[functions.receber-evolution]
+verify_jwt = false

@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { apagarNota, criarEtiqueta, criarNota, definirDono, marcarEtiqueta } from '../lib/api.js';
+import { apagarNota, cancelarRetorno, criarEtiqueta, criarNota, definirDono, desfazerLigacao, marcarEtiqueta } from '../lib/api.js';
+import { rotuloRetorno } from './AcoesConversa.jsx';
 import { NOME_SITUACAO } from '../constants.js';
 import { brl, dataCurta, quando } from '../utils/formato.js';
 
@@ -7,6 +8,8 @@ const CORES = [['neutro', 'Cinza'], ['azul', 'Azul'], ['verde', 'Verde'], ['amar
 const EVENTOS = {
   enviou_texto: 'enviou mensagem', enviou_arquivo: 'enviou arquivo', falha_texto: 'tentou enviar mensagem (não saiu)', falha_arquivo: 'tentou enviar arquivo (não saiu)', incerto_texto: 'enviou mensagem (sem confirmação)', incerto_arquivo: 'enviou arquivo (sem confirmação)',
   nota: 'escreveu nota', nota_apagada: 'apagou nota', etiqueta_posta: 'pôs a etiqueta', etiqueta_tirada: 'tirou a etiqueta', dono: 'passou a conversa para', dono_tirado: 'tirou o dono',
+  resolveu: 'marcou como resolvida', reabriu: 'reabriu a conversa', retorno_marcado: 'marcou retorno', retorno_feito: 'fez o retorno', retorno_cancelado: 'cancelou o retorno',
+  ligacao: 'registrou ligação', ligacao_desfeita: 'desfez o registro de ligação', historico: 'trouxe mensagens antigas',
 };
 
 // Coluna da direita: empresas, cobrança, dono, etiquetas, notas internas e histórico da conversa.
@@ -16,6 +19,7 @@ export default function CaixaDetalhes({ contato, dados, eu, etiquetas, equipe, a
   const [erro, setErro] = useState('');
   const [apagando, setApagando] = useState(null);
   const [novaEtq, setNovaEtq] = useState(null);
+  const [confirmar, setConfirmar] = useState(null); // 'r<id>' ou 'l<id>'
   const s = dados.situacao;
   const minhas = new Set((dados.etiquetas || []).map((e) => e.id));
 
@@ -110,6 +114,52 @@ export default function CaixaDetalhes({ contato, dados, eu, etiquetas, equipe, a
         )}
       </section>
 
+      {(dados.lembretes || []).length > 0 && (
+        <section className="bloco-det">
+          <h4>Retornos</h4>
+          <ul className="lista-simples">
+            {dados.lembretes.map((l) => (
+              <li key={l.id} className={l.feito ? 'feito' : undefined}>
+                <i className={`ti ${l.feito ? 'ti-check' : 'ti-alarm'}`} aria-hidden="true" /> <b>{l.feito ? `Feito por ${l.feito_por?.split(' ')[0] || ''}` : rotuloRetorno(l)}</b>{l.texto ? `: ${l.texto}` : ''}
+                <div className="mini">
+                  Marcado por {l.por} para {rotuloRetorno(l)}
+                  {!l.feito && (l.por_id === eu?.id || eu?.papel === 'admin') && (confirmar === `r${l.id}` ? (
+                    <> · <button type="button" className="link-botao perigo" onClick={async () => { await fazer(`r${l.id}`, () => cancelarRetorno(l.id)); setConfirmar(null); }}>Cancelar o retorno</button>
+                      <button type="button" className="link-botao" onClick={() => setConfirmar(null)}>Manter</button></>
+                  ) : (
+                    <> · <button type="button" className="link-botao" onClick={() => setConfirmar(`r${l.id}`)}>Cancelar</button></>
+                  ))}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {(dados.ligacoes || []).length > 0 && (
+        <section className="bloco-det">
+          <h4>Ligações</h4>
+          <ul className="lista-simples">
+            {dados.ligacoes.map((l) => (
+              <li key={l.id}>
+                <i className={`ti ${l.direcao === 'feita' ? 'ti-phone-outgoing' : 'ti-phone-incoming'}`} aria-hidden="true" /> {l.direcao === 'feita' ? 'Ligamos' : 'O cliente ligou'}, {l.resultado === 'atendida' ? 'atendeu' : l.resultado === 'desconhecido' ? 'sem resultado' : 'não atendeu'}
+                <span className="mini"> · {quando(l.em)}</span>
+                {l.observacao && <div className="mini">{l.observacao}</div>}
+                <div className="mini">
+                  {l.fonte === 'manual' ? `Registrada por ${l.por}` : l.fonte === 'chrome' ? 'Lida no WhatsApp Web' : 'Aviso do WhatsApp'}
+                  {l.fonte === 'manual' && (l.por_id === eu?.id || eu?.papel === 'admin') && (confirmar === `l${l.id}` ? (
+                    <> · <button type="button" className="link-botao perigo" onClick={async () => { await fazer(`l${l.id}`, () => desfazerLigacao(l.id)); setConfirmar(null); }}>Desfazer o registro</button>
+                      <button type="button" className="link-botao" onClick={() => setConfirmar(null)}>Manter</button></>
+                  ) : (
+                    <> · <button type="button" className="link-botao" onClick={() => setConfirmar(`l${l.id}`)}>Desfazer</button></>
+                  ))}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       <section className="bloco-det">
         <h4>Empresas no Omie</h4>
         {(dados.empresas || []).length === 0 ? <p className="mini">Nenhuma empresa ligada a este número.</p> : (
@@ -131,7 +181,7 @@ export default function CaixaDetalhes({ contato, dados, eu, etiquetas, equipe, a
           <h4>O que a equipe fez</h4>
           <ul className="eventos">
             {dados.eventos.map((ev, i) => (
-              <li key={i}><b>{ev.por.split(' ')[0]}</b> {EVENTOS[ev.tipo] || ev.tipo}{ev.detalhe?.etiqueta ? ` "${ev.detalhe.etiqueta}"` : ''}{ev.detalhe?.para ? ` ${ev.detalhe.para}` : ''}{ev.detalhe?.arquivo ? ` (${ev.detalhe.arquivo})` : ''} <span className="mini">· {quando(ev.em)}</span></li>
+              <li key={i}><b>{ev.por.split(' ')[0]}</b> {EVENTOS[ev.tipo] || ev.tipo}{ev.detalhe?.etiqueta ? ` "${ev.detalhe.etiqueta}"` : ''}{ev.detalhe?.para ? ` ${ev.detalhe.para}` : ''}{ev.detalhe?.arquivo ? ` (${ev.detalhe.arquivo})` : ''}{ev.detalhe?.dia ? ` (${dataCurta(ev.detalhe.dia)})` : ''}{ev.tipo === 'ligacao' && ev.detalhe?.resultado ? (ev.detalhe.resultado === 'atendida' ? ': atendeu' : ': não atendeu') : ''} <span className="mini">· {quando(ev.em)}</span></li>
             ))}
           </ul>
         </section>
