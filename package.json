@@ -1,0 +1,26 @@
+{
+  "name": "contas-a-receber-financeiro",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Contas a Receber: métricas do WhatsApp do financeiro e do Omie — Castelo Branco Contabilidade",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.117.3",
+    "react": "19.2.0",
+    "react-dom": "19.2.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "5.1.0",
+    "vite": "7.2.2",
+    "vitest": "4.0.8"
+  }
+}

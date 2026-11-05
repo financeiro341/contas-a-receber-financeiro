@@ -1,0 +1,177 @@
+/* Design system — identidade da Castelo Branco Contabilidade (D-070): azul-marinho, ouro e
+   creme do site da empresa, sobre a estrutura da D-051 (conteúdo claro, menu escuro, Inter).
+   Nenhuma cor fixa nos componentes: sempre estes tokens.
+   Marca: azul-marinho #00204D · ouro #D2AD73 / #C89F50 / #B88A45 · creme #F3F1EB (medidos no
+   site castelobrancocontabilidade.com.br). Ouro não leva texto branco (2,5:1): o texto sobre
+   ouro é o azul-marinho (6,6:1). Como TEXTO sobre fundo claro o ouro reprova no WCAG AA, então
+   o token de texto usa o mesmo matiz mais escuro (--accent-text); o ouro da marca fica para
+   fundo de botão, item ativo e decoração. Pares conferidos em tokens.test.js. */
+:root {
+  /* Fundos: página em creme da marca; painéis e cartões brancos */
+  --bg-base: #F3F1EB;      /* página e área do quadro */
+  --bg-content: #EAE6DA;   /* poço das colunas do Kanban e do quadro do Meu dia */
+  --bg-elevated: #FFFFFF;  /* painéis, topo, cabeçalho, tabela */
+  --bg-card: #FFFFFF;      /* cartão de demanda */
+  --bg-subtle: #F8F6F1;    /* campos, trilhas, hover */
+  --bg-overlay: #FFFFFF;   /* modais, menus flutuantes e avisos (com sombra) */
+  /* Bordas: finas e quentes, no tom do creme */
+  --border: #E6E1D3; --border-strong: #CFC8B4;
+  /* Borda de campo (D-105, WCAG 1.4.11): o contorno de caixa de texto, lista e busca precisa de 3:1 contra o
+     fundo ao redor (a --border-strong dá 1,67:1). Só para campos; divisórias e cartões ficam como estão. */
+  --border-campo: #918A77;
+  /* Texto: azul-marinho da marca nos títulos; azul-acinzentado (o do site) no corpo */
+  --text-primary: #00204D; --text-secondary: #38475C; --text-muted: #566273;
+  --text-inverse: #00204D;   /* sobre cores vivas e pastel (avatar, perigo, chips) */
+  --text-on-accent: #00204D; /* sobre o --accent (botão principal, item ativo do menu): navy sobre ouro */
+  /* Acento: ouro da marca. #C89F50 no botão e no item ativo (hover #B88A45, como no site);
+     #D2AD73 só como decoração (sublinhado, barra); o texto em ouro usa o tom escuro. */
+  --accent: #C89F50; --accent-hover: #B88A45; --accent-soft: #D2AD73;
+  --accent-subtle: #F7EDD6; --accent-text: #8F5A0C;
+  --accent-chip-bg: #F4E6C6; --accent-chip-text: #6B4306;
+  /* Status (D-012): Pendente cinza-azulado · Em andamento âmbar · Executada verde · atraso vermelho.
+     Base = tom da barra, bolinha e borda. `-subtle` + `-text`: faixa clara com texto escuro do
+     mesmo matiz. `-chip-bg` + `-chip-text`: etiqueta pastel. */
+  --neutral: #9AA5B4; --neutral-subtle: #EDF0F4; --neutral-text: #3F4B5E;
+  --neutral-chip-bg: #E9EDF2; --neutral-chip-text: #3F4B5E;
+  --success: #8DDCAC; --success-subtle: #E8F8EE; --success-text: #1F6E40;
+  --success-chip-bg: #E3F6EA; --success-chip-text: #1F6E40;
+  --warning: #FFAE1A; --warning-subtle: #FFF4DE; --warning-text: #7D5100;
+  --warning-chip-bg: #FFEAC6; --warning-chip-text: #7D5100;
+  --danger: #FE6C6C; --danger-subtle: #FFEFF1; --danger-text: #B42318;
+  --danger-chip-bg: #FFE7EA; --danger-chip-text: #A61B1B;
+  /* Urgente (D-087): selo cheio em --danger-text com texto branco (ícone de chama, nunca só cor); o cartão ganha
+     fundo --danger-subtle e barra lateral em --danger-text. O atraso continua só texto vermelho. */
+  --text-on-danger: #FFFFFF;
+  /* Gráficos (D-086): uma cor só. A série em azul-acinzentado e o dia em destaque (hoje) em azul-marinho; os dois
+     passam 3:1 sobre o painel e sobre o fundo leve do fim de semana, e entre si. A divisão por pessoa não usa cor. */
+  --grafico-serie: #6F82A0; --grafico-destaque: #00204D;
+  /* ATENÇÃO: o PDF e o Excel da DRE usam cores fixas que espelham alguns tokens deste tema claro (--text-primary,
+     --text-muted, --success-text, --saida-text, --danger-text, --accent-subtle, --border e --grafico-saida-1..4):
+     mude-os também em src/components/dre/relatorio/cores.js (o teste cores.test.js confere). */
+  /* Gráficos da DRE (D-110): papéis de cor. Saída = escala --grafico-saida-1..4 (vermelho-tijolo por peso, abaixo);
+     entrada, lucro e prejuízo ganham tom próprio, porque o verde e o vermelho de status (--success, --danger) ficam abaixo de 3:1 sobre o
+     painel branco. O lucro é verde (--grafico-lucro, o mesmo valor da entrada). O azul-marinho não é cor de dado na DRE
+     (é marca e navegação). O prejuízo é barra vazada com contorno em --grafico-prejuizo. O
+     significado nunca é só a cor: a posição (acima ou abaixo do zero), o sinal do rótulo e a legenda dizem o mesmo.
+     Passam 3:1 sobre --bg-elevated e --bg-subtle (tokens.test.js). */
+  --grafico-entrada: #237A4B; --grafico-prejuizo: #D92D20;
+  --grafico-lucro: var(--grafico-entrada);
+  /* Saída da DRE (D-110, decisão do Marcus em 30/10/2026, 13h16): escala de 4 tons de vermelho-tijolo (terracota), pelo
+     peso do gasto. O 1 é o tom de mais destaque (o maior gasto), o 4 o de menos; o mesmo gasto tem o mesmo tom em todos
+     os gráficos. No claro o destaque é o mais escuro; no escuro, o mais claro. Os tons são mais marrons que o prejuízo
+     (--grafico-prejuizo, vermelho puro e forte); no claro os tons 1 a 3 são mais escuros que ele e o 4 é um terracota
+     mais claro, para o prejuízo seguir inconfundível (distância de cor de 10 ou mais no tokens.test.js, e o prejuízo
+     ainda tem outros canais: barra vazada, losango e tracejado, chip, cartão vermelho). O tom 1 do claro é um tijolo
+     escuro (#701900), não um marrom quase preto. Os degraus vizinhos têm pelo menos 1,35:1 de contraste entre si, e o tom
+     mais fraco de cada tema passa 3,2:1 sobre --bg-subtle e 3:1 sobre --bg-elevated. --saida-text é o texto dos números de saída na tabela (4,5:1 sobre painel, fundo suave e linha em
+     destaque); difere do --danger-text do prejuízo só pelo tom, e o sinal de menos e a posição na tabela dizem o resto. */
+  --grafico-saida-1: #701900; --grafico-saida-2: #942C0C; --grafico-saida-3: #A54F38; --grafico-saida-4: #CE6C52;
+  --saida-text: #7A2D14;
+  /* Tipografia: Inter em tudo (a mesma do site da empresa). --font-mono continua nomeando
+     datas, números, contadores e links, agora em Inter com algarismos de largura fixa (index.css). */
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'Inter', system-ui, -apple-system, sans-serif;
+  /* Raios: 6–8px em cartões e botões e 12px nos painéis */
+  --radius-xs: 4px; --radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px; --radius-xl: 16px; --radius-pill: 999px;
+  /* Sombras: leves, em azul-marinho translúcido (a separação é por borda fina e sombra suave) */
+  --shadow-sm: 0 1px 2px rgba(0,32,77,0.06); --shadow-md: 0 4px 14px rgba(0,32,77,0.08); --shadow-lg: 0 12px 36px rgba(0,32,77,0.16);
+  /* Transições */
+  --transition-fast: 150ms ease-out; --transition-normal: 200ms ease-out;
+  /* Foco visível (teclado): azul-marinho, bem acima de 3:1 sobre os fundos claros */
+  --focus-ring: #00204D;
+  /* Atrás de modais e da gaveta do mobile */
+  --backdrop: rgba(0,32,77,0.5);
+  /* Azul-marinho da marca: fundo do selo do leão (Marca.jsx), igual em qualquer tema */
+  --marca-azul: #00204D;
+  /* Painel da marca na tela de entrada (D-106): degradê do azul-marinho, brilho dourado no canto, grade fina e a
+     prévia em vidro fosco. Ficam iguais em qualquer tema; o texto por cima usa os tokens de .tema-escuro. */
+  --marca-azul-claro: #0B2E63; --marca-azul-fundo: #001638;
+  --marca-brilho: rgba(210,173,115,0.30); --marca-grade: rgba(255,255,255,0.05);
+  --marca-vidro: rgba(255,255,255,0.07); --marca-vidro-borda: rgba(255,255,255,0.16); --marca-poco: rgba(0,16,40,0.35);
+  /* Cartões da prévia: claros nos dois modos (o modo escuro não muda o desenho do painel). */
+  --marca-cartao: #FFFFFF; --marca-cartao-urgente: #FFEFF1; --marca-urgente: #B42318;
+}
+
+/* Modo escuro do app (D-107): o mesmo nome de token, num azul-marinho bem fundo. As superfícies
+   sobem de tom (página → painel → cartão → menu flutuante), como o creme e o branco no claro. O ouro
+   continua o acento; os textos de status clareiam para passar 4,5:1 sobre o escuro. Liga com
+   data-tema="escuro" no <html> (src/utils/tema.js). Pares conferidos em tokens.test.js. */
+:root[data-tema="escuro"] {
+  color-scheme: dark;
+  --bg-base: #0B1628;      /* página */
+  --bg-content: #08111F;   /* poço das colunas do Kanban e do quadro do Meu dia */
+  --bg-elevated: #13233D;  /* painéis, topo, cabeçalho, tabela */
+  --bg-card: #172A47;      /* cartão de demanda */
+  --bg-subtle: #1A2E4C;    /* campos, trilhas, hover */
+  --bg-overlay: #1B3050;   /* modais, menus flutuantes e avisos */
+  --border: #22385A; --border-strong: #2E4870;
+  --border-campo: #6F84A6;
+  --text-primary: #EEF2F8; --text-secondary: #C3CCDB; --text-muted: #9DACC2;
+  --text-inverse: #00204D; --text-on-accent: #00204D;
+  --accent: #C89F50; --accent-hover: #D2AD73; --accent-soft: #D2AD73;
+  --accent-subtle: #2E2614; --accent-text: #E8C98E;
+  --accent-chip-bg: #3A2F17; --accent-chip-text: #F0D9A8;
+  --neutral: #9AA5B4; --neutral-subtle: #1E2B40; --neutral-text: #C9D2DF;
+  --neutral-chip-bg: #24324A; --neutral-chip-text: #D0D8E4;
+  --success: #8DDCAC; --success-subtle: #12301F; --success-text: #7FD9A3;
+  --success-chip-bg: #163A26; --success-chip-text: #A6E8C0;
+  --warning: #FFAE1A; --warning-subtle: #33260A; --warning-text: #FFC966;
+  --warning-chip-bg: #3D2E0C; --warning-chip-text: #FFD58A;
+  --danger: #FE6C6C; --danger-subtle: #3A1620; --danger-text: #FF9A8F;
+  --danger-chip-bg: #45192A; --danger-chip-text: #FFB3AB;
+  /* Urgente: o selo é o vermelho claro, então o texto por cima é escuro */
+  --text-on-danger: #2A0A0F;
+  /* Gráficos: a série continua azul-acinzentado; o destaque (hoje) vira creme, que aparece sobre o escuro */
+  --grafico-serie: #6F82A0; --grafico-destaque: #F2EFE7;
+  --grafico-entrada: #8DDCAC; --grafico-prejuizo: #FE6C6C;
+  --grafico-lucro: var(--grafico-entrada);
+  /* Saída da DRE: no escuro a escala se inverte (o 1 é o mais claro, o de mais destaque). O matiz fica perto de 30 graus
+     (vermelho-tijolo, não pêssego); o 1 e o 2 ficam acima do prejuízo (#FE6C6C) em luminância e o 3 e o 4 abaixo, e todos
+     a 10 ou mais dele em distância de cor. O 4 é o tijolo mais saturado e passa 3,2:1 sobre --bg-subtle. Os degraus
+     vizinhos têm pelo menos 1,35:1 entre si (o piso de 3:1 do tom 4 e a distância até o prejuízo, que está no meio da
+     faixa de luminância, impedem mais que isso sem esbranquiçar o tom 1). */
+  --grafico-saida-1: #FEC0B2; --grafico-saida-2: #EA9E8E; --grafico-saida-3: #C28378; --grafico-saida-4: #CC5545;
+  --saida-text: #D8825A;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.35); --shadow-md: 0 4px 14px rgba(0,0,0,0.45); --shadow-lg: 0 12px 36px rgba(0,0,0,0.6);
+  --focus-ring: #E8C98E;
+  --backdrop: rgba(0,0,0,0.6);
+}
+
+/* Menu lateral escuro: o mesmo nome de token, com os valores do azul-marinho da marca. Quem
+   está dentro de .tema-escuro (Sidebar) usa estes; o resto do app, os de cima. */
+.tema-escuro {
+  color-scheme: dark;
+  color: var(--text-primary); /* texto que herda a cor (nome do sistema, nome no rodapé) */
+  --bg-base: #0B2E63;      /* fundo do rodapé do menu */
+  --bg-elevated: #00204D;  /* fundo do menu */
+  --bg-subtle: #0F3A78;    /* subitem ativo e bloco do rodapé */
+  --bg-overlay: #0A2A5C;   /* hover */
+  --border: rgba(255,255,255,0.1); --border-strong: rgba(255,255,255,0.2);
+  --text-primary: #FFFFFF; --text-secondary: #C9D3E3; --text-muted: #9DB0CB;
+  --accent-text: #E8C98E;  /* ícone e texto em ouro claro sobre o azul-marinho */
+  --accent-subtle: #0F3A78; /* contador do item ativo (sobre a pílula de ouro) */
+  --focus-ring: #E8C98E;
+}
+
+/* Fluxo de Caixa (D-120, D-128): a tela segue o visual do artefato "Fluxo de Caixa Castelo Branco" (verde e vermelho de entrada e
+   saída, âmbar, roxo no "hoje", Manrope e Plus Jakarta Sans), mas os fundos, superfícies, linhas e textos neutros são os do
+   sistema (D-128: sem o verde-floresta do artefato); valem só dentro de .fx. Os -text são o mesmo matiz mais escuro, para o texto
+   pequeno passar 4,5:1. No tema escuro, só as cores de significado mudam; os neutros já vêm do tema. */
+.fx {
+  --fx-bg: var(--bg-base); --fx-surface: var(--bg-elevated); --fx-surface-2: var(--bg-subtle); --fx-line: var(--border); --fx-ink: var(--text-primary); --fx-muted: var(--text-secondary); --fx-faint: var(--text-muted);
+  --fx-in: #0E9F72; --fx-in-bar: #37C08F; --fx-in-soft: #DDF4EA; --fx-in-text: #0A7A57;
+  --fx-out: #D2483F; --fx-out-bar: #F08A80; --fx-out-soft: #FCE6E3; --fx-out-text: #B8342C;
+  --fx-warn: #B86E00; --fx-warn-bar: #F1A228; --fx-warn-soft: #FDF0D8; --fx-warn-text: #8F5300;
+  --fx-accent: #4F38D9; --fx-accent-soft: #ECE9FC;
+  --fx-chart-line: var(--text-primary); --fx-grid: var(--border);
+  --fx-f-display: "Manrope", "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --fx-f-body: "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --fx-r-lg: 20px; --fx-r-md: 14px; --fx-r-sm: 10px;
+  --fx-shadow: var(--shadow-sm);
+}
+:root[data-tema="escuro"] .fx {
+  --fx-in: #3DD3A0; --fx-in-bar: #2FB585; --fx-in-soft: #123328; --fx-in-text: #3DD3A0;
+  --fx-out: #FF7B70; --fx-out-bar: #E2665C; --fx-out-soft: #3A1D1A; --fx-out-text: #FF7B70;
+  --fx-warn: #F5B648; --fx-warn-bar: #E09A26; --fx-warn-soft: #3A2A10; --fx-warn-text: #F5B648;
+  --fx-accent: #A495FF; --fx-accent-soft: #25204A;
+}
