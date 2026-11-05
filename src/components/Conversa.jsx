@@ -7,7 +7,7 @@ import { Estado, Vazio, useDados } from './comum.jsx';
 const ARQUIVO = { documentMessage: 'ti-file-text', imageMessage: 'ti-photo', audioMessage: 'ti-microphone', videoMessage: 'ti-video', stickerMessage: 'ti-mood-smile' };
 
 // Painel lateral com a conversa do dia, as ligações e a situação (só leitura).
-export default function Conversa({ contato, dia, aoFechar }) {
+export default function Conversa({ contato, dia, aoFechar, abrirNaCaixa }) {
   const { dados, erro, carregando, recarregar } = useDados(() => lerConversa(contato, dia), [contato, dia]);
   const fechar = useRef(null);
   const corpo = useRef(null);
@@ -35,6 +35,7 @@ export default function Conversa({ contato, dia, aoFechar }) {
               <span>{dataLonga(dia)}</span>
             </div>
           </div>
+          {abrirNaCaixa && <button className="botao" type="button" onClick={() => abrirNaCaixa(contato)}><i className="ti ti-brand-whatsapp" aria-hidden="true" />Abrir em Conversas</button>}
           <button ref={fechar} className="botao icone" type="button" onClick={aoFechar} aria-label="Fechar conversa"><i className="ti ti-x" aria-hidden="true" /></button>
         </header>
         <div className="corpo" ref={corpo}>

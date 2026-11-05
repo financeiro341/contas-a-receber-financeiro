@@ -39,3 +39,30 @@ export function minutos(m) {
 }
 export const pct = (n, t) => (t ? `${Math.round((n / t) * 100)}%` : '0%');
 export const plural = (n, um, varios) => (n === 1 ? um : varios);
+
+// Instantes (ISO com fuso) no horário de Brasília.
+const FMT_DIA = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' });
+const FMT_HORA = new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' });
+export const diaDe = (instante) => FMT_DIA.format(new Date(instante));
+export const horaDe = (instante) => FMT_HORA.format(new Date(instante));
+// "14:32" hoje, "Ontem", "03/11" no ano, "03/11/25" antes.
+export function quando(instante) {
+  if (!instante) return '';
+  const d = diaDe(instante);
+  const h = hoje();
+  if (d === h) return horaDe(instante);
+  if (d === somarDias(h, -1)) return 'Ontem';
+  return d.slice(0, 4) === h.slice(0, 4) ? dataCurta(d) : `${dataCurta(d)}/${d.slice(2, 4)}`;
+}
+// Separador do dia na conversa: "Hoje", "Ontem" ou "terça-feira, 3 de novembro de 2026".
+export function rotuloDia(iso) {
+  const h = hoje();
+  if (iso === h) return 'Hoje';
+  if (iso === somarDias(h, -1)) return 'Ontem';
+  return dataLonga(iso);
+}
+export function tamanhoArquivo(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1).replace('.', ',')} MB`;
+}

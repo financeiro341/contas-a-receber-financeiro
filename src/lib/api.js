@@ -55,3 +55,31 @@ export const lerAtendimento = (data) => ler({ acao: 'atendimento', data });
 export const lerHistorico = (de, ate) => ler({ acao: 'historico', de, data: ate });
 export const lerConversa = (contato, data) => ler({ acao: 'conversa', contato: String(contato), data });
 export const lerOmie = () => ler({ acao: 'omie' });
+
+// Caixa de entrada (fase 2).
+export const lerCaixa = (dias = 30) => ler({ acao: 'caixa', dias: String(dias) });
+export const lerConversaCompleta = (contato, antes) => ler({ acao: 'conversa_completa', contato: String(contato), ...(antes ? { antes } : {}) });
+export const lerEtiquetas = () => ler({ acao: 'etiquetas' });
+export const lerEquipe = () => ler({ acao: 'equipe' });
+
+async function postar(corpo) {
+  const s = await sessaoAtual();
+  if (!s) throw Object.assign(new Error('Entre de novo.'), { codigo: 401 });
+  const r = await fetch(FUNCAO, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${s.access_token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(corpo),
+  });
+  let resposta = {};
+  try { resposta = await r.json(); } catch { resposta = {}; }
+  if (!r.ok) throw Object.assign(new Error(resposta.erro || 'Não foi possível concluir agora.'), { codigo: r.status });
+  return resposta;
+}
+
+export const enviarTexto = (contato, texto) => postar({ acao: 'enviar_texto', contato, texto });
+export const enviarArquivo = (contato, { nome, mimetype, base64, legenda }) => postar({ acao: 'enviar_arquivo', contato, nome, mimetype, base64, legenda });
+export const criarNota = (contato, texto) => postar({ acao: 'nota', contato, texto });
+export const apagarNota = (id) => postar({ acao: 'nota_apagar', id });
+export const marcarEtiqueta = (contato, etiqueta, ligar) => postar({ acao: 'etiqueta', contato, etiqueta, ligar });
+export const criarEtiqueta = (nome, cor) => postar({ acao: 'etiqueta_criar', nome, cor });
+export const definirDono = (contato, usuario) => postar({ acao: 'atribuir', contato, usuario });

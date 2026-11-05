@@ -53,7 +53,7 @@ export function useDados(leitor, deps, intervalo) {
     const id = setInterval(() => { if (document.visibilityState === 'visible') carregar(true); }, intervalo);
     return () => clearInterval(id);
   }, [intervalo, carregar]);
-  return { ...estado, recarregar: () => carregar(false) };
+  return { ...estado, recarregar: () => carregar(false), atualizar: () => carregar(true) };
 }
 
 // Carregando: esqueleto com a forma da página; erro: mensagem e "Tentar de novo".
@@ -72,6 +72,13 @@ export function Estado({ carregando, erro, recarregar, forma = 'kpis', children 
 }
 
 export function Esqueleto({ forma }) {
+  if (forma === 'lista') {
+    return (
+      <div role="status" aria-label="Carregando" style={{ padding: 12 }}>
+        {[0, 1, 2, 3, 4, 5].map((i) => <div key={i} className="cartao esqueleto" style={{ height: 64, marginBottom: 8 }} />)}
+      </div>
+    );
+  }
   if (forma === 'conversa') {
     return (
       <div role="status" aria-label="Carregando">

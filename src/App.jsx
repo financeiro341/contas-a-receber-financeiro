@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { aoMudarSessao, lerAtendimento, lerEu, sair, sessaoAtual } from './lib/api.js';
+import { aoMudarSessao, lerAtendimento, lerCaixa, lerEu, sair, sessaoAtual } from './lib/api.js';
 import { dataLonga, diaSemana, diaUtilAnterior, hoje, somarDias } from './utils/formato.js';
 import { useDados } from './components/comum.jsx';
 import leao from './assets/leao.png';
@@ -9,9 +9,11 @@ import Atendimento from './components/Atendimento.jsx';
 import Historico, { INICIO_DADOS } from './components/Historico.jsx';
 import Omie from './components/Omie.jsx';
 import Conversa from './components/Conversa.jsx';
+import Caixa from './components/Caixa.jsx';
 
 const ABAS = [
   { id: 'hoje', nome: 'Cobrança do dia', curto: 'Cobrança', icone: 'ti-target-arrow' },
+  { id: 'conversas', nome: 'Conversas', curto: 'Conversas', icone: 'ti-brand-whatsapp' },
   { id: 'atendimento', nome: 'Atendimento', curto: 'Atendimento', icone: 'ti-messages' },
   { id: 'historico', nome: 'Histórico', curto: 'Histórico', icone: 'ti-chart-line' },
   { id: 'omie', nome: 'Omie', curto: 'Omie', icone: 'ti-building-bank' },
@@ -39,6 +41,14 @@ function ContagemEspera() {
   return <span className={`contador${atrasado ? ' atrasado' : ''}`} aria-label={`${lista.length} sem ler`} title={`${lista.length} ${lista.length > 1 ? 'mensagens' : 'mensagem'} de cliente sem ler`}>{lista.length}</span>;
 }
 
+// Na aba Conversas: quantas conversas de clientes têm mensagem sem ler (últimos 30 dias).
+function ContagemSemLer() {
+  const { dados } = useDados(() => lerCaixa(30), [], 60000);
+  const n = (dados || []).filter((c) => c.situacao === 'cliente' && c.sem_ler > 0).length;
+  if (!n) return null;
+  return <span className="contador" aria-label={`${n} sem ler`}>{n}</span>;
+}
+
 function SeletorDia({ dia, setDia }) {
   const ehHoje = dia === hoje();
   const mudar = (n) => {
@@ -64,7 +74,18 @@ export default function App() {
   const [aba, setAba] = useState(() => { try { return localStorage.getItem('cr:aba') || 'hoje'; } catch { return 'hoje'; } });
   const [dia, setDia] = useState(diaInicial);
   const [conversa, setConversa] = useState(null);
+  const [pedidoCaixa, setPedidoCaixa] = useState(null);
   const origem = useRef(null);
+  const topo = useRef(null);
+
+  // Altura do topo em uma variável de CSS, para a caixa de entrada ocupar o resto da tela.
+  useEffect(() => {
+    const el = topo.current;
+    if (!el || typeof ResizeObserver === 'undefined') return undefined;
+    const ro = new ResizeObserver(() => document.documentElement.style.setProperty('--alt-topo', `${el.offsetHeight}px`));
+    ro.observe(el);
+    return () => ro.disconnect();
+  });
 
   useEffect(() => { sessaoAtual().then(setSessao); return aoMudarSessao(setSessao); }, []);
   useEffect(() => {
@@ -80,6 +101,11 @@ export default function App() {
     origem.current = document.activeElement;
     setConversa({ contato, dia: d || dia });
   }, [dia]);
+  const abrirNaCaixa = useCallback((contato) => {
+    setConversa(null);
+    setPedidoCaixa({ id: contato, em: Date.now() });
+    setAba('conversas');
+  }, []);
   const fecharConversa = useCallback(() => {
     setConversa(null);
     // O foco volta para quem abriu a conversa.
@@ -91,11 +117,11 @@ export default function App() {
 
   const ehHoje = dia === hoje();
   const abaAtual = ABAS.find((a) => a.id === aba);
-  const usaDia = aba !== 'omie';
+  const usaDia = aba !== 'omie' && aba !== 'conversas';
 
   return (
     <>
-      <header className="topo tema-escuro">
+      <header className="topo tema-escuro" ref={topo}>
         <div className="faixa">
           <div className="marca"><img src={leao} alt="" /><div><b>Contas a Receber</b><small>Castelo Branco · WhatsApp do financeiro e Omie</small></div></div>
           <div className="espaco" />
@@ -111,21 +137,23 @@ export default function App() {
               <button key={a.id} role="tab" type="button" aria-selected={aba === a.id} onClick={() => setAba(a.id)}>
                 <i className={`ti ${a.icone}`} aria-hidden="true" /><span className="nome-longo">{a.nome}</span><span className="nome-curto">{a.curto}</span>
                 {a.id === 'atendimento' && <ContagemEspera />}
+                {a.id === 'conversas' && <ContagemSemLer />}
               </button>
             ))}
           </nav>
           {usaDia && <SeletorDia dia={dia} setDia={setDia} />}
         </div>
       </header>
-      <main>
+      <main className={aba === 'conversas' ? 'main-caixa' : undefined}>
         <h1 className="so-leitor">{abaAtual?.nome}</h1>
         {usaDia && <p className="data-pagina">{aba === 'historico' ? `Até ${dataLonga(dia)}` : dataLonga(dia)}</p>}
         {aba === 'hoje' && <Hoje dia={dia} ehHoje={ehHoje} abrirConversa={abrirConversa} />}
+        {aba === 'conversas' && <Caixa eu={eu} contatoPedido={pedidoCaixa} />}
         {aba === 'atendimento' && <Atendimento dia={dia} ehHoje={ehHoje} abrirConversa={abrirConversa} />}
         {aba === 'historico' && <Historico dia={dia} abrirDia={(d) => { setDia(d); setAba('hoje'); }} />}
         {aba === 'omie' && <Omie abrirConversa={abrirConversa} />}
       </main>
-      {conversa && <Conversa contato={conversa.contato} dia={conversa.dia} aoFechar={fecharConversa} />}
+      {conversa && <Conversa contato={conversa.contato} dia={conversa.dia} aoFechar={fecharConversa} abrirNaCaixa={abrirNaCaixa} />}
     </>
   );
 }
