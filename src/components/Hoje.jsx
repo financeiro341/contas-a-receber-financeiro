@@ -3,6 +3,7 @@ import { lerDia } from '../lib/api.js';
 import { NOME_SITUACAO, ORDEM_SITUACAO, PAGARAM_OU_PROMETERAM } from '../constants.js';
 import { brl, dataCurta, inteiro, pct, plural } from '../utils/formato.js';
 import { Estado, Kpi, PilhaSituacoes, Vazio, baixarCsv, useDados } from './comum.jsx';
+import QuemCobrar from './QuemCobrar.jsx';
 
 const semAcento = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
@@ -81,6 +82,8 @@ export default function Hoje({ dia, ehHoje, abrirConversa, abrirNaCaixa }) {
               </ul>
             </section>
           )}
+
+          {ehHoje && <QuemCobrar abrirNaCaixa={abrirNaCaixa} />}
 
           <section className="cartao bloco" aria-labelledby="t-situacao">
             <h2 id="t-situacao"><i className="ti ti-chart-bar" aria-hidden="true" />Situação dos clientes cobrados</h2>

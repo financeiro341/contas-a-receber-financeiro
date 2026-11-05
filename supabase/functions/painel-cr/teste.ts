@@ -72,11 +72,31 @@ globalThis.fetch = async (input: any, init: any = {}) => {
       const t = (cod: number, venc: string, st: string, gerado: string, cat = "1.02.02") => ({ codigo_lancamento_omie: cod, codigo_cliente_fornecedor: 4112028795, numero_documento: "9007", numero_parcela: "001/001", data_vencimento: venc, valor_documento: 1621, status_titulo: st, codigo_categoria: cat, boleto: { cGerado: gerado }, codigo_barras_ficha_compensacao: "03399.0" });
       return resp({ pagina: 1, total_de_paginas: 1, conta_receber_cadastro: [{ ...t(5, "01/11/2026", "A VENCER", "S"), codigo_cliente_fornecedor: 999 }, t(3, "10/12/2026", "A VENCER", "S", "1.02.97"), t(1, "10/11/2026", "A VENCER", "S"), t(2, "10/10/2026", "ATRASADO", "N"), t(4, "10/09/2026", "PAGO", "S")] });
     }
+    if (b.call === "PesquisarLancamentos") {
+      const pr = b.param[0];
+      if (db.omieBloqueado) { db.pesquisasBloqueadas = (db.pesquisasBloqueadas || 0) + 1; return resp({ faultstring: "ERROR: Consumo redundante detectado. Aguarde 60 segundos." }, 500); }
+      db.pesquisas = [...(db.pesquisas || []), pr];
+      const tt = (id: number, venc: string, st: string, valor: number, liq: number, aberto: number, cli = 77) => ({ cabecTitulo: { nCodTitulo: id, cCodCateg: "1.02.02", dDtVenc: venc, dDtPrevisao: venc, cStatus: st, nValorTitulo: valor, nCodCliente: cli, cNatureza: "R" }, resumo: { nValLiquido: liq, nValAberto: aberto }, lancamentos: liq ? [{ nCodLanc: id * 10, dDtLanc: "03/11/2026", nValLanc: liq }] : [] });
+      if (pr.cStatus === "ATRASADO") return resp({ nTotRegistros: 2, nTotPaginas: 1, titulosEncontrados: [tt(2, "10/10/2026", "ATRASADO", 500, 0, 500), tt(3, "10/09/2026", "ATRASADO", 300, 0, 300, 88)] });
+      if (pr.dDtPagtoDe) return resp({ nTotRegistros: 1, nTotPaginas: 1, titulosEncontrados: [tt(1, "02/11/2026", "RECEBIDO", 1000, 1000, 0)] });
+      const pag1 = [tt(1, "02/11/2026", "RECEBIDO", 1000, 1000, 0), tt(2, "10/10/2026", "ATRASADO", 500, 0, 500)];
+      const pag2 = [tt(3, "10/09/2026", "ATRASADO", 300, 0, 300, 88), tt(4, "20/11/2026", "AVENCER", 700, 0, 700), tt(5, "15/11/2026", "CANCELADO", 900, 0, 0)];
+      return resp({ nTotRegistros: 5, nTotPaginas: 2, titulosEncontrados: pr.nPagina === 1 ? pag1 : pag2 });
+    }
     if (b.call === "ObterBoleto") return resp({ cLinkBoleto: db.linkRuim ? "https://evil.example/x.pdf" : "https://cdn.omie.com.br/repo/boleto.pdf?Signature=x", cCodBarras: "03399.0" });
     return resp({ faultstring: "não esperado" }, 500);
   }
   if (url.startsWith("https://cdn.omie.com.br/")) return new Response(new TextEncoder().encode("%PDF-1.4 boleto"), { status: 200, headers: { "content-type": "application/pdf" } });
   if (url.includes("/rest/v1/respostas_prontas") && metodo === "POST") return resp([{ id: 5 }], 201);
+  if (url.includes("/rest/v1/omie_retratos") && metodo === "POST") { const r = { id: (db.retratos || []).length + 1, calculado_em: new Date(Date.now() - (db.idadeRetrato || 0)).toISOString(), ...JSON.parse(init.body) }; db.retratos = [...(db.retratos || []), r]; return resp([r], 201); }
+  if (url.includes("/rest/v1/omie_retratos?select")) {
+    const todos = db.retratos || [];
+    const lista = url.includes("status=in.(completo,incompleto)") ? todos.filter((r: any) => r.status === "completo" || r.status === "incompleto") : todos;
+    return resp(lista.slice(-1));
+  }
+  if (url.includes("rpc/painel_quem_cobrar")) { db.quemCobrar = JSON.parse(init.body); return resp({ dia: db.quemCobrar.p_dia, contatos: [{ contato_id: 94, valor: 500 }], sem_numero: { clientes: 1, valor: 300 } }); }
+  if (url.includes("rpc/painel_buscar_conversa")) { db.busca = JSON.parse(init.body); return resp({ resultados: [], mais: false }); }
+  if (url.includes("rpc/painel_omie")) return resp({ dia: "2026-11-04", financeiro: { recebido_total: 1, atualizado: "2026-11-04T18:14:00-03:00" }, atrasos: [] });
   if (url.includes("/rest/v1/resolucoes")) { db.resolucoes = [...(db.resolucoes || []), { metodo, url, corpo: init.body }]; return new Response(null, { status: metodo === "DELETE" ? 204 : 201 }); }
   if (url.includes("/rest/v1/lembretes") && metodo === "POST") { const l = { id: 11, ...JSON.parse(init.body) }; db.lembretes = [l]; return resp([l], 201); }
   if (url.includes("/rest/v1/lembretes?select")) return resp(db.lembretes ? [{ feito_em: null, cancelado_em: null, ...db.lembretes[0] }] : []);
@@ -244,4 +264,48 @@ const midia = async (id: string) => { const r = await fetch(`http://fn/?acao=mid
   perfil = { first_name: "Olavio", last_name: "Santos", role: "financeiro", sector: "financeiro" };
   const r9 = await fetch("http://fn/", { method: "POST", headers: { Authorization: "Bearer outro2", "Content-Type": "application/json" }, body: JSON.stringify({ acao: "enviar_boleto", contato: 94, titulo: 1 }) });
   ok(r9.status === 403, "Olavio não envia boleto");
+}
+
+{
+  // Relatório do Omie com os números do dia (só consulta: PesquisarLancamentos) e Quem cobrar hoje.
+  db.omieCalls = [];
+  const g = async (q: string) => { const r = await fetch("http://fn/?" + q, { headers: { Authorization: "Bearer tok3" } }); return [r.status, await r.json()] as const; };
+  let [s, x] = await g("acao=omie_agora");
+  const f = x.financeiro || {};
+  ok(s === 200 && x.status === "completo" && f.titulos_faturado_mes === 2 && f.faturado_mes === 1700 && f.recebido_mes === 1000 && f.inadimplencia_total === 800 && f.a_vencer_mes === 700 && f.recebido_no_mes === 1000, "totais do Omie calculados na hora " + JSON.stringify({ s, f }));
+  ok(db.pesquisas.length === 4 && db.pesquisas.every((p: any) => p.nRegPorPagina === 50 && p.cCodCateg === "1.02.02" && p.cNatureza === "R"), "3 consultas de Honorários, 50 por página, todas as páginas");
+  ok(db.retratos.length === 2 && db.retratos[0].status === "calculando", "trava gravada antes de consultar o Omie");
+  ok(db.retratos[1].atrasados.length === 2 && db.retratos[1].atrasados.find((a: any) => a.cliente === 77).valor === 500, "retrato guardado com os atrasados por cliente");
+  const antes = db.pesquisas.length;
+  [s, x] = await g("acao=omie_agora&atualizar=1");
+  ok(s === 200 && db.pesquisas.length === antes, "atualizar antes de 2 minutos reaproveita o cálculo");
+  db.retratos[1].calculado_em = new Date(Date.now() - 5 * 60_000).toISOString();
+  [s, x] = await g("acao=omie_agora");
+  ok(s === 200 && db.pesquisas.length === antes, "sem atualizar, o cálculo de 5 minutos vale");
+  [s, x] = await g("acao=omie_agora&atualizar=1");
+  ok(s === 200 && db.pesquisas.length === antes + 4 && db.retratos.length === 4 && db.retratos[3].status === "completo", "atualizar depois de 2 minutos calcula de novo");
+  [s, x] = await g("acao=quem_cobrar");
+  ok(s === 200 && db.quemCobrar.p_atrasados.length === 2 && x.contatos.length === 1 && x.calculado_em, "quem cobrar usa os atrasados do retrato");
+  [s, x] = await g("acao=omie");
+  ok(s === 200 && x.financeiro.faturado_mes === 1700, "aba Omie mostra o cálculo mais novo");
+  [s, x] = await g("acao=buscar_conversa&contato=94&q=a");
+  ok(s === 400, "busca com 1 letra recusada");
+  [s, x] = await g("acao=buscar_conversa&contato=94&q=" + encodeURIComponent("  boleto %_ "));
+  ok(s === 200 && db.busca.p_q === "boleto %_" && db.busca.p_contato === 94, "busca na conversa passa o termo ao banco");
+  ok((db.omieCalls || []).every((c: string) => c === "PesquisarLancamentos"), "no Omie, só consulta (PesquisarLancamentos)");
+}
+
+{
+  // Omie com bloqueio: não insiste, grava o erro e segura novas tentativas por 2 minutos; trava de outro cálculo em andamento.
+  const g = async (q: string) => { const r = await fetch("http://fn/?" + q, { headers: { Authorization: "Bearer tok4" } }); return [r.status, await r.json()] as const; };
+  db.retratos = [{ id: 90, dia: new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date()), calculado_em: new Date(Date.now() - 20 * 60_000).toISOString(), status: "completo", totais: {}, atrasados: [] }];
+  db.omieBloqueado = true;
+  let [s, x] = await g("acao=omie_agora&atualizar=1");
+  ok(s === 429 && db.pesquisasBloqueadas === 1 && db.retratos.at(-1).status === "erro", "bloqueio do Omie: uma chamada só, erro gravado " + JSON.stringify({ s, n: db.pesquisasBloqueadas }));
+  [s, x] = await g("acao=omie_agora&atualizar=1");
+  ok(s === 429 && db.pesquisasBloqueadas === 1, "depois do erro, 2 minutos sem consultar o Omie");
+  db.retratos = db.retratos.filter((r: any) => r.status !== "completo");
+  [s, x] = await g("acao=omie_agora&atualizar=1");
+  ok(s === 429 && db.pesquisasBloqueadas === 1 && /2 minutos/.test(x.erro), "sem cálculo guardado, espera 2 minutos depois do erro");
+  db.omieBloqueado = false;
 }

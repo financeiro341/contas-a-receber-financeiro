@@ -78,6 +78,11 @@ export const lerAtendimento = (data) => ler({ acao: 'atendimento', data });
 export const lerHistorico = (de, ate) => ler({ acao: 'historico', de, data: ate });
 export const lerConversa = (contato, data) => ler({ acao: 'conversa', contato: String(contato), data });
 export const lerOmie = () => ler({ acao: 'omie' });
+// Omie calculado na hora (só consulta): totais do dia para o PDF e atrasados para o Quem cobrar hoje. Leva de 30 a 60 s
+// na primeira vez; depois a função reaproveita o cálculo por 10 minutos.
+export const lerOmieAgora = (atualizar = false) => ler({ acao: 'omie_agora', ...(atualizar ? { atualizar: '1' } : {}) });
+export const lerQuemCobrar = (atualizar = false) => ler({ acao: 'quem_cobrar', ...(atualizar ? { atualizar: '1' } : {}) });
+export const buscarNaConversa = (contato, q) => ler({ acao: 'buscar_conversa', contato: String(contato), q });
 
 // Caixa de entrada (fase 2).
 export const lerCaixa = (dias = 30) => ler({ acao: 'caixa', dias: String(dias) });

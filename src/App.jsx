@@ -116,9 +116,9 @@ export default function App() {
     origem.current = document.activeElement;
     setConversa({ contato, dia: d || dia });
   }, [dia]);
-  const abrirNaCaixa = useCallback((contato) => {
+  const abrirNaCaixa = useCallback((contato, opcoes = {}) => {
     setConversa(null);
-    setPedidoCaixa({ id: contato, em: Date.now() });
+    setPedidoCaixa({ id: contato, em: Date.now(), segundaVia: !!opcoes.segundaVia });
     setAba('conversas');
   }, []);
   const fecharConversa = useCallback(() => {
@@ -166,7 +166,7 @@ export default function App() {
         {aba === 'conversas' && <Caixa eu={eu} contatoPedido={pedidoCaixa} />}
         {aba === 'atendimento' && <Atendimento dia={dia} ehHoje={ehHoje} abrirConversa={abrirConversa} />}
         {aba === 'historico' && <Historico dia={dia} abrirDia={(d) => { setDia(d); setAba('hoje'); }} />}
-        {aba === 'omie' && <Omie abrirConversa={abrirConversa} />}
+        {aba === 'omie' && <Omie abrirConversa={abrirConversa} eu={eu} />}
       </main>
       {conversa && <Conversa contato={conversa.contato} dia={conversa.dia} aoFechar={fecharConversa} abrirNaCaixa={abrirNaCaixa} />}
     </>

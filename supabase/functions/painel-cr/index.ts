@@ -5,6 +5,8 @@
 // (produção): entra quem é admin ou do setor financeiro ou diretoria. Envia mensagem só quem é admin
 // ou está na tabela atendentes com pode_enviar (decisão do Marcus: Maria Clara e os administradores).
 // A chave da Evolution fica só no segredo EVOLUTION_APIKEY da função; nunca vai ao navegador.
+import { retratoDoOmie } from "./omie_totais.ts";
+
 const PAINEL_URL = "https://nbksfvivdodjdddreppv.supabase.co";
 const PAINEL_CHAVE = "sb_publishable_nOTE6VavsxhOqwrPNjQuew_3kFt2xx5"; // chave pública do Painel
 const URL_BASE = Deno.env.get("SUPABASE_URL")!;
@@ -332,7 +334,8 @@ async function midia(id: string) {
 // (isso pode ter tarifa do banco). As chaves ficam só nos segredos OMIE_APP_KEY e OMIE_APP_SECRET da função.
 const OMIE_KEY = Deno.env.get("OMIE_APP_KEY") || "";
 const OMIE_SECRET = Deno.env.get("OMIE_APP_SECRET") || "";
-const OMIE_SO_LEITURA = new Set(["ListarContasReceber", "ObterBoleto"]);
+// Só consulta: listar títulos, obter o boleto já emitido e pesquisar lançamentos (totais do dia e Quem cobrar hoje).
+const OMIE_SO_LEITURA = new Set(["ListarContasReceber", "ObterBoleto", "PesquisarLancamentos"]);
 const CATEGORIAS: Record<string, string> = { "1.02.02": "Honorários", "1.02.97": "Adicional anual" };
 
 async function omie(caminho: string, call: string, param: Record<string, unknown>) {
@@ -353,6 +356,10 @@ async function omie(caminho: string, call: string, param: Record<string, unknown
     if (dados?.faultstring) {
       if (/n[ãa]o existem registros/i.test(dados.faultstring)) return null;
       console.error(`omie ${call}: ${String(dados.faultstring).slice(0, 200)}`);
+      // Bloqueio ou consumo indevido/redundante: não insistir (repetir só piora e pode travar a chave por mais tempo).
+      if (/bloque|consumo|redundan|limite|excedid|too many/i.test(String(dados.faultstring)) || r.status === 429) {
+        throw new Erro(429, "O Omie pediu para esperar antes de novas consultas. Tente de novo em alguns minutos.");
+      }
       throw new Erro(502, "O Omie não respondeu como esperado. Tente de novo em instantes.");
     }
     if (!r.ok || !dados) { console.error(`omie ${call}: ${r.status} ${texto.slice(0, 200)}`); throw new Erro(502, "O Omie não respondeu como esperado. Tente de novo em instantes."); }
@@ -790,6 +797,86 @@ async function tratarPost(u: Usuario, corpo: any) {
   }
 }
 
+// Retrato do Omie (totais do dia e atrasados por cliente), calculado na hora com a conta do financeiro.py v8. Lê cerca de
+// 100 páginas do Omie (30 a 60 segundos), então fica guardado em omie_retratos e é reaproveitado por 10 minutos; "Atualizar"
+// refaz, mas não antes de 2 minutos do último cálculo. Um cálculo por vez para todo o sistema: quem chega enquanto outro
+// calcula (linha "calculando" de menos de 3 minutos) espera o resultado dele. Depois de um erro, 2 minutos sem tentar.
+const RETRATO_VALE_MS = 10 * 60_000;
+const RETRATO_MIN_MS = 2 * 60_000;
+const TRAVA_MS = 3 * 60_000;
+const PRAZO_MS = 110_000; // a função tem 150 s; passou disso, para de ler o Omie
+let calculando: Promise<any> | null = null;
+const CAMPOS_RETRATO = "id,dia,calculado_em,calculado_por,status,totais,atrasados";
+
+async function ultimoRetrato(dia: string) {
+  const r = await rest(`omie_retratos?select=${CAMPOS_RETRATO}&dia=eq.${dia}&status=in.(completo,incompleto)&order=calculado_em.desc&limit=1`);
+  return r[0] || null;
+}
+async function ultimaTentativa(dia: string) {
+  const r = await rest(`omie_retratos?select=id,calculado_em,status&dia=eq.${dia}&order=calculado_em.desc&limit=1`);
+  return r[0] || null;
+}
+const espera = (ms: number) => new Promise((ok) => setTimeout(ok, ms));
+
+async function retratoOmie(usuario: Usuario, atualizar: boolean) {
+  if (!OMIE_KEY || !OMIE_SECRET) throw new Erro(503, "A ligação com o Omie ainda não foi configurada: faltam as chaves na função.");
+  const dia = hojeBrasil();
+  const ult = await ultimoRetrato(dia);
+  const idade = ult ? Date.now() - Date.parse(ult.calculado_em) : Infinity;
+  if (ult && (idade < RETRATO_MIN_MS || (!atualizar && idade < RETRATO_VALE_MS))) return ult;
+  if (calculando) return await calculando;
+
+  const tentativa = await ultimaTentativa(dia);
+  const idadeTentativa = tentativa ? Date.now() - Date.parse(tentativa.calculado_em) : Infinity;
+  if (tentativa?.status === "calculando" && idadeTentativa < TRAVA_MS) {
+    // Outra pessoa (ou outra instância da função) está calculando: espera o resultado, sem consultar o Omie de novo.
+    for (let i = 0; i < 40; i++) {
+      await espera(3000);
+      const r = await ultimoRetrato(dia);
+      if (r && Date.parse(r.calculado_em) >= Date.parse(tentativa.calculado_em)) return r;
+      const t = await ultimaTentativa(dia);
+      if (t && t.status === "erro" && Date.parse(t.calculado_em) >= Date.parse(tentativa.calculado_em)) break;
+    }
+    throw new Erro(409, "Outra pessoa está consultando o Omie agora. Tente de novo em 1 minuto.");
+  }
+  if (tentativa?.status === "erro" && idadeTentativa < RETRATO_MIN_MS) {
+    throw new Erro(429, "A última consulta ao Omie falhou há pouco. Tente de novo em 2 minutos.");
+  }
+
+  calculando = (async () => {
+    await rest("omie_retratos", { method: "POST", body: JSON.stringify({ dia, calculado_por: usuario.nome, status: "calculando", totais: {}, atrasados: [] }) });
+    const prazo = Date.now() + PRAZO_MS;
+    const consultar = async (param: Record<string, unknown>) => {
+      for (let n = 0; ; n++) {
+        if (Date.now() > prazo) throw new Erro(504, "O Omie demorou demais para responder. Tente de novo em alguns minutos.");
+        try {
+          return await omie("financas/pesquisartitulos", "PesquisarLancamentos", param);
+        } catch (e) {
+          // Só repete falha passageira (502), no máximo 2 vezes; bloqueio do Omie (429) e chave faltando (503) param na hora.
+          if (n >= 2 || !(e instanceof Erro) || e.status !== 502) throw e;
+          await espera(1500 * (n + 1));
+        }
+      }
+    };
+    try {
+      const r = await retratoDoOmie(consultar, dia);
+      return (await rest("omie_retratos", {
+        method: "POST",
+        body: JSON.stringify({ dia, calculado_por: usuario.nome, status: r.status, totais: r.totais, atrasados: r.atrasados }),
+      }))[0];
+    } catch (e) {
+      await rest("omie_retratos", { method: "POST", body: JSON.stringify({ dia, calculado_por: usuario.nome, status: "erro", totais: {}, atrasados: [] }) }).catch(() => {});
+      throw e;
+    }
+  })().finally(() => { calculando = null; });
+  return await calculando;
+}
+
+// O que vai para a tela: os totais (sem os atrasados por cliente, que só o Quem cobrar usa).
+function totaisParaTela(r: any) {
+  return { dia: r.dia, calculado_em: r.calculado_em, calculado_por: r.calculado_por, status: r.status, financeiro: { ...r.totais, atualizado: r.calculado_em } };
+}
+
 Deno.serve(async (req) => {
   const h = cors(req.headers.get("Origin"));
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: h });
@@ -829,8 +916,28 @@ Deno.serve(async (req) => {
         const contato = inteiro(u.searchParams.get("contato"), "Contato");
         return json(await rpc("painel_conversa", { p_contato: contato, p_dia: data }), 200, h);
       }
-      case "omie":
-        return json(await rpc("painel_omie", {}), 200, h);
+      case "omie": {
+        // A aba Omie mostra o cálculo mais novo: o do relatório gravado ou o feito na hora (botão Baixar ou Atualizar).
+        const [base, ret] = await Promise.all([rpc("painel_omie", {}), ultimoRetrato(hojeBrasil())]);
+        const doRelatorio = base?.financeiro?.atualizado ? Date.parse(base.financeiro.atualizado) : 0;
+        if (base && ret && ret.status === "completo" && Date.parse(ret.calculado_em) > doRelatorio) base.financeiro = { ...ret.totais, atualizado: ret.calculado_em };
+        return json(base, 200, h);
+      }
+      case "omie_agora": {
+        const r = await retratoOmie(usuario, u.searchParams.get("atualizar") === "1");
+        return json(totaisParaTela(r), 200, h);
+      }
+      case "quem_cobrar": {
+        const r = await retratoOmie(usuario, u.searchParams.get("atualizar") === "1");
+        const lista = await rpc("painel_quem_cobrar", { p_atrasados: r.atrasados, p_dia: r.dia });
+        return json({ ...lista, calculado_em: r.calculado_em, status: r.status }, 200, h);
+      }
+      case "buscar_conversa": {
+        const contato = inteiro(u.searchParams.get("contato"), "Contato");
+        const q = String(u.searchParams.get("q") || "").trim().slice(0, 100);
+        if (q.length < 2) return json({ erro: "Digite pelo menos 2 letras para buscar." }, 400, h);
+        return json(await rpc("painel_buscar_conversa", { p_contato: contato, p_q: q, p_limite: 50 }), 200, h);
+      }
       case "caixa": {
         const dias = Math.min(90, Math.max(1, Math.trunc(Number(u.searchParams.get("dias"))) || 30));
         return json(await rpc("painel_caixa", { p_dias: dias }), 200, h);

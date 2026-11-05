@@ -1,21 +1,73 @@
-import { lerOmie } from '../lib/api.js';
+import { useState } from 'react';
+import { lerDia, lerOmie, lerOmieAgora } from '../lib/api.js';
+import { dadosDoDia, gerarPdf, nomeDoArquivo } from '../utils/relatorioPdf.js';
+import leao from '../assets/leao.png';
 import { NOME_SITUACAO } from '../constants.js';
-import { brl, dataCurta, inteiro, nomeMes } from '../utils/formato.js';
+import { brl, dataCurta, hoje, inteiro, nomeMes } from '../utils/formato.js';
 import { Estado, Kpi, Vazio, useDados } from './comum.jsx';
 
+// Data e hora no horário de Brasília (o cálculo feito na hora vem em UTC; o do relatório, com o fuso).
 const quando = (iso) => {
-  const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
-  return m ? `${m[3]}/${m[2]} às ${m[4]}:${m[5]}` : '';
+  const t = Date.parse(iso || '');
+  if (Number.isNaN(t)) return '';
+  return new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(t)).replace(',', ' às');
 };
 
+async function leaoEmDataUrl() {
+  const b = await (await fetch(leao)).blob();
+  return await new Promise((ok, falha) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = falha; r.readAsDataURL(b); });
+}
+
+// Baixar o relatório (pedido do Marcus, 05/11/2026): calcula no Omie com a data de hoje (só consulta), junta a Cobrança de
+// hoje do sistema até a hora do clique e baixa o PDF no modelo do relatório que ia por e-mail.
+function BaixarRelatorio({ eu, aoCalcular }) {
+  const [estado, setEstado] = useState(null); // null | 'omie' | 'pdf' | { erro } | { ok }
+  async function baixar() {
+    setEstado('omie');
+    try {
+      const dia = hoje();
+      const [omie, cobranca] = await Promise.all([lerOmieAgora(true), lerDia(dia)]);
+      setEstado('pdf');
+      const d = dadosDoDia(cobranca, omie.financeiro);
+      const doc = await gerarPdf(d, { leaoPng: await leaoEmDataUrl(), quem: eu?.nome });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(doc.output('blob'));
+      a.download = nomeDoArquivo(dia);
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+      setEstado({ ok: omie.status === 'completo' ? 'Relatório baixado com os números de agora.' : 'Relatório baixado, mas o Omie não devolveu todos os títulos: confira os totais.' });
+      aoCalcular?.();
+    } catch (e) {
+      setEstado({ erro: e.message || 'Não foi possível montar o relatório.' });
+    }
+  }
+  const ocupado = estado === 'omie' || estado === 'pdf';
+  return (
+    <div className="baixar-relatorio">
+      <button type="button" className="botao principal" onClick={baixar} disabled={ocupado}>
+        <i className={`ti ${ocupado ? 'ti-loader-2 girando' : 'ti-download'}`} aria-hidden="true" />
+        {estado === 'omie' ? 'Consultando o Omie…' : estado === 'pdf' ? 'Montando o PDF…' : 'Baixar relatório de hoje'}
+      </button>
+      <span className="mini" role="status" aria-live="polite">
+        {estado === 'omie' ? 'Calculando os números de hoje no Omie. Pode levar até 1 minuto.'
+          : estado?.erro ? <span className="texto-erro">{estado.erro}</span>
+            : estado?.ok ? estado.ok : 'PDF no modelo do relatório diário, com a cobrança de hoje e o Omie calculado na hora.'}
+      </span>
+    </div>
+  );
+}
+
 // Totais do Omie (os mesmos do relatório de cobrança, tarefa das 16h11) e os maiores atrasos dos cobrados.
-export default function Omie({ abrirConversa }) {
-  const { dados, erro, carregando, recarregar } = useDados(() => lerOmie(), []);
+export default function Omie({ abrirConversa, eu }) {
+  const { dados, erro, carregando, recarregar, atualizar } = useDados(() => lerOmie(), []);
   const tom = (v) => (v == null ? undefined : Number(v) > 0 ? 'perigo' : 'bom');
   const f = dados?.financeiro || null;
   const mes = f?.inicio_mes ? nomeMes(f.inicio_mes) : '';
   return (
     <Estado carregando={carregando} erro={erro} recarregar={recarregar}>
+      <BaixarRelatorio eu={eu} aoCalcular={atualizar} />
       {!f ? <div className="cartao"><Vazio icone="ti-building-bank" titulo="Ainda sem totais do Omie" texto="Eles entram com o primeiro relatório gravado, todo dia útil depois das 17h30." /></div> : (
         <>
           <div className="linha-status">

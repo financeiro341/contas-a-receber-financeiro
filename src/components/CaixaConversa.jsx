@@ -9,6 +9,7 @@ import RespostasProntas, { preencher } from './RespostasProntas.jsx';
 import AcoesConversa, { rotuloRetorno } from './AcoesConversa.jsx';
 import Midia, { TIPOS_MIDIA } from './Midia.jsx';
 import SegundaVia from './SegundaVia.jsx';
+import BuscaConversa from './BuscaConversa.jsx';
 
 const ICONE_ARQUIVO = { documentMessage: 'ti-file-text', imageMessage: 'ti-photo', audioMessage: 'ti-microphone', videoMessage: 'ti-video', stickerMessage: 'ti-mood-smile' };
 const ACEITOS = '.pdf,.jpg,.jpeg,.png,.xlsx,.xls,.docx,.doc,.csv,.txt,.zip';
@@ -33,7 +34,7 @@ const chaveRascunho = (eu, contato) => `cr:rascunho:${eu?.id || 'x'}:${contato}`
 function lerRascunho(chave) { try { return sessionStorage.getItem(chave) || ''; } catch { return ''; } }
 function guardarRascunho(chave, t) { try { if (t) sessionStorage.setItem(chave, t); else sessionStorage.removeItem(chave); } catch { /* sem armazenamento */ } }
 
-export default function CaixaConversa({ contato, eu, etiquetas, equipe, aoVoltar, aoMudar, recarregarEtiquetas, respostas, recarregarRespostas }) {
+export default function CaixaConversa({ contato, eu, etiquetas, equipe, aoVoltar, aoMudar, recarregarEtiquetas, respostas, recarregarRespostas, pedirSegundaVia }) {
   const conv = useDados(() => lerConversaCompleta(contato), [contato], 5000);
   const [saindo, setSaindo] = useState([]); // mensagens que estão saindo agora (aparecem na hora)
   const d = conv.dados;
@@ -58,6 +59,10 @@ export default function CaixaConversa({ contato, eu, etiquetas, equipe, aoVoltar
   const [confirmacao, setConfirmacao] = useState('');
   const [baixando, setBaixando] = useState(false);
   const [segundaVia, setSegundaVia] = useState(false);
+  const [buscando, setBuscando] = useState(false);
+  const [indo, setIndo] = useState(false);
+  // Vindo do "Quem cobrar hoje": abre a conversa já com a segunda via do boleto.
+  useEffect(() => { if (pedirSegundaVia && eu?.omie_ligado) { setPainelRespostas(null); setSegundaVia(true); } }, [pedirSegundaVia, eu?.omie_ligado]);
 
   useEffect(() => { guardarRascunho(rascunho, texto); }, [rascunho, texto]);
   // Esc fecha a conversa, como no WhatsApp Web. Se houver uma janelinha aberta (respostas prontas, segunda via,
@@ -69,6 +74,8 @@ export default function CaixaConversa({ contato, eu, etiquetas, equipe, aoVoltar
     const tecla = (e) => {
       if (e.key !== 'Escape' || e.isComposing) return;
       if (document.querySelector('.popover, .respostas, .lateral, [role="alertdialog"]')) return;
+      // Com a busca aberta, o Esc fecha só a busca.
+      if (document.querySelector('.busca-conversa')) { e.preventDefault(); setBuscando(false); return; }
       const { detalhes: det, aoVoltar: voltar } = estadoEsc.current;
       if (det && window.innerWidth <= 1280) { setDetalhes(false); return; }
       voltar?.();
@@ -119,6 +126,41 @@ export default function CaixaConversa({ contato, eu, etiquetas, equipe, aoVoltar
     } catch (e) {
       setHistorico(null);
       setAviso(e.message);
+    }
+  }
+
+  // Leva até uma mensagem achada na busca: se ela ainda não está na tela, lê as mais antigas até chegar nela.
+  async function irPara(alvo) {
+    const mostrar = () => requestAnimationFrame(() => requestAnimationFrame(() => {
+      const el = corpo.current?.querySelector(`[data-msg="${CSS.escape(String(alvo.id))}"]`);
+      if (!el) { setAviso('Não deu para mostrar essa mensagem na conversa. Ela continua no resultado da busca.'); return; }
+      noFim.current = false;
+      el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      el.classList.add('destaque');
+      setTimeout(() => el.classList.remove('destaque'), 2500);
+    }));
+    if (mensagens.some((m) => m.id === alvo.id)) { mostrar(); return; }
+    setIndo(true);
+    setAviso(null);
+    try {
+      let primeira = mensagens[0]?.em;
+      let lidas = [];
+      let maisAinda = true;
+      for (let i = 0; i < 25 && primeira && maisAinda; i++) {
+        const r = await lerConversaCompleta(contato, primeira);
+        const novas = r.mensagens || [];
+        lidas = [...novas, ...lidas];
+        maisAinda = !!r.mais_antigas;
+        if (!novas.length || novas.some((m) => m.id === alvo.id)) break;
+        primeira = novas[0].em;
+      }
+      setAnteriores((a) => [...lidas, ...a]);
+      setMaisAntigas(maisAinda);
+      mostrar();
+    } catch (e) {
+      setAviso(e.message);
+    } finally {
+      setIndo(false);
     }
   }
 
@@ -250,6 +292,11 @@ export default function CaixaConversa({ contato, eu, etiquetas, equipe, aoVoltar
           </div>
         </div>
         {d?.dono && <span className="dono-topo"><i className="ti ti-user" aria-hidden="true" />{d.dono.id === eu?.id ? 'Você' : d.dono.nome}</span>}
+        {d && (
+          <button type="button" className="botao icone" aria-pressed={buscando} onClick={() => setBuscando(!buscando)} aria-label="Buscar nesta conversa" title="Buscar nesta conversa">
+            <i className="ti ti-search" aria-hidden="true" />
+          </button>
+        )}
         {d && <AcoesConversa contato={contato} resolvida={resolvida} aoMudar={mudou} aoAvisar={avisar} />}
         <button type="button" className="botao icone" aria-pressed={detalhes} onClick={() => setDetalhes(!detalhes)} aria-label={detalhes ? 'Esconder detalhes' : 'Mostrar detalhes'} title="Detalhes, notas e etiquetas">
           <i className="ti ti-layout-sidebar-right" aria-hidden="true" />
@@ -257,6 +304,8 @@ export default function CaixaConversa({ contato, eu, etiquetas, equipe, aoVoltar
       </header>
 
       <div className="conversa-meio">
+        {buscando && <BuscaConversa contato={contato} aoIr={irPara} aoFechar={() => setBuscando(false)} />}
+        {indo && <div className="aviso" role="status"><i className="ti ti-loader-2 girando" aria-hidden="true" />Abrindo as mensagens mais antigas até a que você escolheu…</div>}
         {(confirmacao || retornos.length > 0 || resolvida) && (
           <div className="faixas-conversa">
             {confirmacao && <div className="aviso ok" role="status"><i className="ti ti-circle-check" aria-hidden="true" /><span style={{ flex: 1 }}>{confirmacao}</span></div>}
@@ -294,7 +343,7 @@ export default function CaixaConversa({ contato, eu, etiquetas, equipe, aoVoltar
                   return (
                     <Fragment key={m.id}>
                       {separador}
-                      <div className={`balao ${m.nos ? 'nos' : 'cliente'}`}>
+                      <div className={`balao ${m.nos ? 'nos' : 'cliente'}`} data-msg={m.id}>
                         {m.arquivo && <span className="arquivo"><i className={`ti ${ICONE_ARQUIVO[m.tipo] || 'ti-paperclip'}`} aria-hidden="true" />{m.arquivo}</span>}
                         <Midia id={m.id} tipo={m.tipo} arquivo={m.arquivo} />
                         {m.texto && <div><TextoWhats texto={m.texto} /></div>}

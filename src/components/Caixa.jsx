@@ -40,6 +40,7 @@ export default function Caixa({ eu, contatoPedido }) {
             setAberto(null);
             requestAnimationFrame(() => document.querySelector(`.caixa-item[data-contato="${Number(id)}"]`)?.focus());
           }}
+          pedirSegundaVia={contatoPedido?.segundaVia && contatoPedido.id === aberto ? contatoPedido.em : null}
           aoMudar={caixa.atualizar}
           recarregarEtiquetas={etiquetas.atualizar}
           respostas={respostas.dados || []}
