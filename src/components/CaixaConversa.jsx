@@ -60,6 +60,22 @@ export default function CaixaConversa({ contato, eu, etiquetas, equipe, aoVoltar
   const [segundaVia, setSegundaVia] = useState(false);
 
   useEffect(() => { guardarRascunho(rascunho, texto); }, [rascunho, texto]);
+  // Esc fecha a conversa, como no WhatsApp Web. Se houver uma janelinha aberta (respostas prontas, segunda via,
+  // ligação, retorno), o Esc fecha só ela; com os detalhes cobrindo a conversa (tela menor), fecha os detalhes.
+  const estadoEsc = useRef({});
+  estadoEsc.current = { detalhes, aoVoltar };
+  useEffect(() => {
+    // Ouve na fase de captura, antes das janelinhas: assim ainda dá para ver se alguma está aberta.
+    const tecla = (e) => {
+      if (e.key !== 'Escape' || e.isComposing) return;
+      if (document.querySelector('.popover, .respostas, .lateral, [role="alertdialog"]')) return;
+      const { detalhes: det, aoVoltar: voltar } = estadoEsc.current;
+      if (det && window.innerWidth <= 1280) { setDetalhes(false); return; }
+      voltar?.();
+    };
+    document.addEventListener('keydown', tecla, true);
+    return () => document.removeEventListener('keydown', tecla, true);
+  }, []);
   useEffect(() => { if (!confirmacao) return undefined; const t = setTimeout(() => setConfirmacao(''), 6000); return () => clearTimeout(t); }, [confirmacao]);
   useEffect(() => { if (window.innerWidth > 1280) { try { localStorage.setItem('cr:detalhes', detalhes ? 's' : 'n'); } catch { /* sem armazenamento */ } } }, [detalhes]);
 

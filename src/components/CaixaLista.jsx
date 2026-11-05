@@ -106,7 +106,7 @@ export default function CaixaLista({ itens, carregando, erro, recarregar, aberto
           <ul className="caixa-itens">
             {lista.map((c) => (
               <li key={c.contato_id}>
-                <button type="button" className="caixa-item" aria-current={aberto === c.contato_id ? 'true' : undefined} onClick={() => aoAbrir(c.contato_id)}>
+                <button type="button" className="caixa-item" data-contato={c.contato_id} aria-current={aberto === c.contato_id ? 'true' : undefined} onClick={() => aoAbrir(c.contato_id)}>
                   <Iniciais nome={c.nome} />
                   <span className="meio">
                     <span className="linha1">

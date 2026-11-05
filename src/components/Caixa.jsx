@@ -34,7 +34,12 @@ export default function Caixa({ eu, contatoPedido }) {
           eu={eu}
           etiquetas={etiquetas.dados || []}
           equipe={equipe.dados || []}
-          aoVoltar={() => setAberto(null)}
+          aoVoltar={() => {
+            // Fecha a conversa e devolve o foco ao contato na lista (Esc ou botão Voltar).
+            const id = aberto;
+            setAberto(null);
+            requestAnimationFrame(() => document.querySelector(`.caixa-item[data-contato="${Number(id)}"]`)?.focus());
+          }}
           aoMudar={caixa.atualizar}
           recarregarEtiquetas={etiquetas.atualizar}
           respostas={respostas.dados || []}
