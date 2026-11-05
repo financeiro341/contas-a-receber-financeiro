@@ -2,6 +2,13 @@
 export function hoje() {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
 }
+// "Bom dia" até 11h59, "Boa tarde" até 17h59, "Boa noite" depois, no horário de Brasília.
+export function saudacao(agora = new Date()) {
+  const h = Number(new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', hour: 'numeric', hourCycle: 'h23' }).format(agora));
+  if (h >= 5 && h < 12) return 'Bom dia';
+  if (h >= 12 && h < 18) return 'Boa tarde';
+  return 'Boa noite';
+}
 export function somarDias(iso, n) {
   const [a, m, d] = iso.split('-').map(Number);
   const dt = new Date(Date.UTC(a, m - 1, d + n));

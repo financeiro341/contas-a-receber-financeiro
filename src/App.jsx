@@ -4,6 +4,7 @@ import { dataLonga, diaSemana, diaUtilAnterior, hoje, somarDias } from './utils/
 import { useDados } from './components/comum.jsx';
 import leao from './assets/leao.png';
 import Login from './components/Login.jsx';
+import { alternarTema } from './utils/tema.js';
 import Hoje from './components/Hoje.jsx';
 import Atendimento from './components/Atendimento.jsx';
 import Historico, { INICIO_DADOS } from './components/Historico.jsx';
@@ -22,13 +23,6 @@ const ABAS = [
 function diaInicial() {
   const h = hoje();
   return [0, 6].includes(diaSemana(h)) ? diaUtilAnterior(h) : h;
-}
-
-function alternarTema() {
-  const r = document.documentElement;
-  const escuro = r.getAttribute('data-tema') === 'escuro';
-  if (escuro) r.removeAttribute('data-tema'); else r.setAttribute('data-tema', 'escuro');
-  try { localStorage.setItem('cr:tema', JSON.stringify({ tema: escuro ? 'claro' : 'escuro' })); } catch { /* sem armazenamento */ }
 }
 
 // Na aba Atendimento: quantos clientes esperam resposta hoje com a última mensagem ainda não lida.
