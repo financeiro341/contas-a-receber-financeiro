@@ -2,22 +2,21 @@ import { useState } from 'react';
 import { lerHistorico } from '../lib/api.js';
 import { PAGARAM_OU_PROMETERAM } from '../constants.js';
 import { dataCurta, inteiro, minutos, pct, somarDias } from '../utils/formato.js';
-import { Estado, Kpi, baixarCsv, useDados } from './comum.jsx';
+import { Barras, Estado, Kpi, Vazio, baixarCsv, useDados } from './comum.jsx';
 
 // As mensagens completas dos clientes existem no banco desde 01/11/2026.
 export const INICIO_DADOS = '2026-11-01';
-const PERIODOS = [['7', 'Últimos 7 dias'], ['30', 'Últimos 30 dias'], ['mes', 'Mês do dia escolhido']];
+const PERIODOS = [['7', '7 dias'], ['30', '30 dias'], ['mes', 'Mês do dia escolhido']];
 
 export default function Historico({ dia, abrirDia }) {
   const [periodo, setPeriodo] = useState('30');
   let de = periodo === 'mes' ? `${dia.slice(0, 8)}01` : somarDias(dia, -(Number(periodo) - 1));
   if (de < INICIO_DADOS) de = INICIO_DADOS;
-  const { dados, erro, carregando } = useDados(() => lerHistorico(de, dia), [de, dia]);
+  const { dados, erro, carregando, recarregar } = useDados(() => lerHistorico(de, dia), [de, dia]);
   const dias = dados?.dias || [];
   const soma = (k) => dias.reduce((s, d) => s + (Number(d[k]) || 0), 0);
   const pp = (d) => PAGARAM_OU_PROMETERAM.reduce((s, k) => s + (d.por_situacao?.[k] || 0), 0);
   const pag = (d) => (d.por_situacao?.pagou || 0) + (d.por_situacao?.pagou_parcial || 0);
-  const max = Math.max(1, ...dias.map((d) => d.cobrados));
   const medianas = dias.map((d) => d.primeira_resposta_mediana_min).filter((v) => v != null).sort((x, y) => x - y);
   const medianaPeriodo = medianas.length ? medianas[Math.floor(medianas.length / 2)] : null;
 
@@ -39,11 +38,13 @@ export default function Historico({ dia, abrirDia }) {
 
   return (
     <>
-      <div className="ferramentas" role="group" aria-label="Período">
-        {PERIODOS.map(([k, r]) => <button key={k} type="button" className={`botao${periodo === k ? ' principal' : ''}`} aria-pressed={periodo === k} onClick={() => setPeriodo(k)}>{r}</button>)}
-        <span style={{ fontSize: 12.5, color: 'var(--text-muted)', marginLeft: 'auto' }}>De {dataCurta(de)} a {dataCurta(dia)} · dias úteis · dados desde 01/11/2026</span>
+      <div className="ferramentas">
+        <div className="periodos" role="group" aria-label="Período">
+          {PERIODOS.map(([k, r]) => <button key={k} type="button" aria-pressed={periodo === k} onClick={() => setPeriodo(k)}>{r}</button>)}
+        </div>
+        <span className="linha-status" style={{ margin: 0 }}>De {dataCurta(de)} a {dataCurta(dia)}, só dias úteis. Dados desde 01/11/2026.</span>
       </div>
-      <Estado carregando={carregando} erro={erro}>
+      <Estado carregando={carregando} erro={erro} recarregar={recarregar}>
         <section className="grade g-4" aria-label="Resumo do período">
           <Kpi icone="ti-users" rotulo="Cobranças no período" valor={inteiro(soma('cobrados'))} apoio={`${dias.length} dias com cobrança`} />
           <Kpi icone="ti-message-check" rotulo="Taxa de resposta" valor={pct(soma('responderam'), soma('cobrados'))} apoio={`${inteiro(soma('responderam'))} responderam`} />
@@ -57,20 +58,14 @@ export default function Historico({ dia, abrirDia }) {
             <span><span className="bolinha" style={{ background: 'var(--grafico-serie)' }} aria-hidden="true" /> Cobrados</span>
             <span><span className="bolinha" style={{ background: 'var(--grafico-destaque)' }} aria-hidden="true" /> Responderam</span>
           </div>
-          {dias.length === 0 ? <div className="vazio">Sem cobranças no período.</div> : (
-            <>
-              <div className="barras" role="img" aria-label={dias.map((d) => `${dataCurta(d.dia)}: ${d.cobrados} cobrados, ${d.responderam} responderam`).join('; ')}>
-                {dias.map((d) => (
-                  <div className="col" key={d.dia}>
-                    <div className="par">
-                      <i className="b1" style={{ height: `${(d.cobrados / max) * 100}%` }} title={`${dataCurta(d.dia)}: ${d.cobrados} cobrados`} />
-                      <i className="b2" style={{ height: `${(d.responderam / max) * 100}%` }} title={`${dataCurta(d.dia)}: ${d.responderam} responderam`} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="eixo" aria-hidden="true">{dias.map((d) => <span key={d.dia}>{dataCurta(d.dia)}</span>)}</div>
-            </>
+          {dias.length === 0 ? <Vazio icone="ti-chart-bar-off" titulo="Sem cobranças no período" texto="Escolha um período maior ou outro dia." /> : (
+            <Barras
+              rotulos={dias.map((d) => dataCurta(d.dia))}
+              series={[
+                { nome: 'cobrados', classe: 'b1', valores: dias.map((d) => d.cobrados) },
+                { nome: 'responderam', classe: 'b2', valores: dias.map((d) => d.responderam) },
+              ]}
+            />
           )}
         </section>
 
@@ -91,7 +86,7 @@ export default function Historico({ dia, abrirDia }) {
                       <td className="num">{pct(d.responderam, d.cobrados)}</td>
                       <td className="num">{pp(d)}</td>
                       <td className="num">{minutos(d.primeira_resposta_mediana_min)}</td>
-                      <td><span className={`selo ${d.fonte === 'claude' ? 'claude' : 'regras'}`}>{d.fonte === 'claude' ? 'Claude' : 'Regras'}</span></td>
+                      <td><span className={`selo ${d.fonte === 'claude' ? 'claude' : 'regras'}`}>{d.fonte === 'claude' ? 'Claude' : 'Prévia'}</span></td>
                     </tr>
                   ))}
                 </tbody>
@@ -101,7 +96,7 @@ export default function Historico({ dia, abrirDia }) {
           <section className="cartao" aria-labelledby="t-recorrentes">
             <h2 id="t-recorrentes"><i className="ti ti-repeat" aria-hidden="true" />Mais vezes sem retorno</h2>
             <div className="sub">Clientes cobrados que não responderam em 2 dias ou mais do período (leitura do Claude).</div>
-            {(dados?.recorrentes || []).length === 0 ? <div className="vazio">Ninguém ainda.</div> : (
+            {(dados?.recorrentes || []).length === 0 ? <Vazio icone="ti-mood-smile" titulo="Ninguém até agora" texto="Aparece aqui quem ficar sem retorno em 2 dias ou mais." /> : (
               <ul className="fila">
                 {dados.recorrentes.map((c) => (
                   <li key={c.contato_id} style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 2px', gap: 10 }}>

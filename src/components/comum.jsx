@@ -2,9 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { SITUACOES } from '../constants.js';
 import { pct } from '../utils/formato.js';
 
-export function Kpi({ icone, rotulo, valor, apoio, dinheiro }) {
+export function Kpi({ icone, rotulo, valor, apoio, dinheiro, tom }) {
   return (
-    <div className="cartao kpi">
+    <div className={`cartao kpi${tom ? ` tom-${tom}` : ''}`}>
       <div className="rotulo">{icone && <i className={`ti ${icone}`} aria-hidden="true" />}{rotulo}</div>
       <div className={`valor${dinheiro ? ' dinheiro' : ''}`}>{valor}</div>
       {apoio && <div className="apoio">{apoio}</div>}
@@ -56,10 +56,75 @@ export function useDados(leitor, deps, intervalo) {
   return { ...estado, recarregar: () => carregar(false) };
 }
 
-export function Estado({ carregando, erro, children }) {
-  if (erro) return <div className="aviso erro" role="alert"><i className="ti ti-alert-triangle" aria-hidden="true" />{erro.message}</div>;
-  if (carregando) return <div className="carregando" role="status">Carregando…</div>;
+// Carregando: esqueleto com a forma da página; erro: mensagem e "Tentar de novo".
+export function Estado({ carregando, erro, recarregar, forma = 'kpis', children }) {
+  if (erro) {
+    return (
+      <div className="aviso erro" role="alert">
+        <i className="ti ti-alert-triangle" aria-hidden="true" />
+        <span style={{ flex: 1 }}>{erro.message}</span>
+        {recarregar && <button type="button" className="botao" onClick={recarregar}>Tentar de novo</button>}
+      </div>
+    );
+  }
+  if (carregando) return <Esqueleto forma={forma} />;
   return children;
+}
+
+export function Esqueleto({ forma }) {
+  if (forma === 'conversa') {
+    return (
+      <div role="status" aria-label="Carregando">
+        {[60, 40, 70, 45].map((w, i) => <div key={i} className="cartao esqueleto" style={{ height: 52, width: `${w}%`, margin: `8px 0 8px ${i % 2 ? 'auto' : '0'}` }} />)}
+      </div>
+    );
+  }
+  const n = forma === 'kpis6' ? 6 : 4;
+  return (
+    <div role="status" aria-label="Carregando">
+      <div className={`grade ${n === 6 ? 'g-kpi' : 'g-4'}`}>
+        {Array.from({ length: n }).map((_, i) => <div key={i} className="cartao esqueleto" style={{ height: 112 }} />)}
+      </div>
+      <div className="cartao esqueleto bloco" style={{ height: 120 }} />
+      <div className="cartao esqueleto bloco" style={{ height: 260 }} />
+    </div>
+  );
+}
+
+export function Vazio({ icone = 'ti-mood-empty', titulo, texto }) {
+  return (
+    <div className="vazio">
+      <i className={`ti ${icone}`} aria-hidden="true" style={{ fontSize: 28, color: 'var(--text-muted)' }} />
+      <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginTop: 6 }}>{titulo}</div>
+      {texto && <div style={{ fontSize: 13, marginTop: 2 }}>{texto}</div>}
+    </div>
+  );
+}
+
+// Gráfico de barras em CSS (sem biblioteca), com o valor em cima de cada barra.
+export function Barras({ rotulos, series, altura = 170 }) {
+  const max = Math.max(1, ...series.flatMap((s) => s.valores));
+  const densas = rotulos.length > 12 ? ' densas' : '';
+  const descricao = rotulos.map((r, i) => `${r}: ${series.map((s) => `${s.valores[i]} ${s.nome}`).join(', ')}`).join('; ');
+  return (
+    <div className="grafico">
+      <div className={`barras${densas}`} style={{ height: altura }} role="img" aria-label={descricao}>
+        {rotulos.map((r, i) => (
+          <div className="col" key={r}>
+            <div className="par">
+              {series.map((s) => (
+                <span className="bv" key={s.classe}>
+                  {s.valores[i] > 0 && <em>{s.valores[i]}</em>}
+                  <i className={s.classe} style={{ height: `${(s.valores[i] / max) * 82}%` }} title={`${r}: ${s.valores[i]} ${s.nome}`} />
+                </span>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className={`eixo${densas}`} aria-hidden="true">{rotulos.map((r) => <span key={r}>{r}</span>)}</div>
+    </div>
+  );
 }
 
 // CSV com ponto e vírgula (abre direto no Excel em português).
