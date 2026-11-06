@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Ligações do Financeiro (Castelo Branco)",
   "short_name": "Ligações CBC",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Lê o histórico de ligações do WhatsApp Web do financeiro e grava no sistema do contas a receber. Só lê: não clica, não envia e não marca nada como lido.",
   "permissions": ["storage"],
   "host_permissions": [

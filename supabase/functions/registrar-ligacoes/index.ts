@@ -95,6 +95,7 @@ Deno.serve(async (req: Request) => {
       video: v.video,
       iniciada_em: v.iniciada_em,
       duracao_seg: v.duracao,
+      deste_computador: v.deste_computador,
     }));
     const { data, error } = await supabase.rpc("extensao_gravar_ligacoes", { p_aparelho: aparelho.id, p_linhas: linhas });
     if (error) return resposta(500, { erro: "não gravou" });

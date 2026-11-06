@@ -11,12 +11,21 @@
     return Date.UTC(a, m - 1, d, 3, 0, 0);
   }
 
+  // Número do aparelho deste computador no WhatsApp ("<número>:<aparelho>@c.us", guardado pelo próprio WhatsApp Web).
+  function meuAparelho() {
+    try {
+      const v = String(localStorage.getItem('last-wid-md') || '').replace(/"/g, '');
+      const m = v.match(/:(\d+)@/);
+      return m ? m[1] : null;
+    } catch { return null; }
+  }
+
   let rodando = false;
   async function ler(motivo) {
     if (rodando) return;
     rodando = true;
     try {
-      const { ligacoes, fontes } = await globalThis.LeitorLigacoes.lerDoDia(inicioDeHoje());
+      const { ligacoes, fontes } = await globalThis.LeitorLigacoes.lerDoDia(inicioDeHoje(), meuAparelho());
       await chrome.runtime.sendMessage({ tipo: 'ligacoes', versao: VERSAO, ligacoes, resumo: { motivo, fontes, lidas: ligacoes.length } });
     } catch (e) {
       try { await chrome.runtime.sendMessage({ tipo: 'erro_leitura', versao: VERSAO, erro: String(e && e.message || e).slice(0, 200) }); } catch { /* extensão recarregada */ }

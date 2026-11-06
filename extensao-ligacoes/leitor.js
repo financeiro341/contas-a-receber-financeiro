@@ -50,25 +50,44 @@
   // Resultado da ligação nos nomes do sistema.
   function resultado(r) {
     const s = String(r ?? '').toLowerCase();
-    if (/connect|accept|answer|atend/.test(s)) return 'atendida';
+    if (/connect|accept|answer|atend|complet/.test(s)) return 'atendida';
     if (/reject|declin|recus|busy/.test(s)) return 'recusada';
     if (/miss|unanswer|no.?answer|timeout|perd|cancel/.test(s)) return 'nao_atendida';
     return 'desconhecido';
   }
 
-  // Formato A: mensagem "call_log" da conversa.
-  function deMensagem(m) {
+  // Formato A: mensagem "call_log" da conversa (conferido no 174 em 06/11/2026). No WhatsApp Web o id é um texto
+  // "true_<chat>_<id>" (true = nós ligamos) ou "false_<chat>_<id>"; "from" e "to" dizem quem ligou para quem;
+  // callCreator traz o aparelho que fez a ligação ("<número>:<aparelho>@lid"; sem ":", o celular principal);
+  // finalCallOutcome: Completed, AcceptedElsewhere (atendida em outro aparelho), Missed, Rejected.
+  function partesDoId(id) {
+    if (typeof id === 'string') {
+      const m = id.match(/^(true|false)_([^_]+)_(.+)$/);
+      if (m) return { nossa: m[1] === 'true', remoto: m[2], msgId: m[3] };
+      return { nossa: null, remoto: null, msgId: id };
+    }
+    if (id && typeof id === 'object') return { nossa: !!id.fromMe, remoto: jidDe(id.remote), msgId: id.id || null };
+    return { nossa: null, remoto: null, msgId: null };
+  }
+  const aparelhoDe = (jid) => { const s = jidDe(jid); const m = s && s.match(/^\d+:(\d+)@/); return m ? m[1] : (s ? '0' : null); };
+
+  function deMensagem(m, meuAparelho) {
     const t = numero(m.t);
-    const chat = jidDe(m.id && m.id.remote) || jidDe(m.to) || jidDe(m.from);
-    const nossa = m.id ? !!m.id.fromMe : !!m.fromMe;
+    const p = partesDoId(m.id);
+    const nossa = p.nossa ?? !!m.fromMe;
+    const chat = p.remoto || jidDe(nossa ? m.to : m.from);
     const dur = numero(m.callDuration ?? m.duration);
-    let res = resultado(m.callOutcome ?? m.subtype);
+    let res = resultado(m.finalCallOutcome || m.callOutcome || m.subtype);
     if (res === 'desconhecido' && Number.isFinite(dur)) res = dur > 0 ? 'atendida' : 'nao_atendida';
+    const criador = aparelhoDe(m.callCreator);
     return {
-      chave: String((m.id && m.id.id) || m.id || '').slice(0, 120),
+      // "w-" + id da mensagem: chave nova da versão 0.2.0 (a 0.1.0 usava o id inteiro e foi anulada).
+      chave: ('w-' + String(p.msgId || '')).slice(0, 120),
       chat, direcao: nossa ? 'feita' : 'recebida', resultado: res,
       duracao_seg: Number.isFinite(dur) ? Math.round(dur) : null,
       video: !!(m.isVideoCall ?? m.isVideo), iniciada_em: new Date(t * 1000).toISOString(),
+      // Ligação feita: deste computador (true), de outro aparelho do mesmo número (false) ou sem como saber (null).
+      deste_computador: nossa && criador != null && meuAparelho != null ? criador === meuAparelho : null,
     };
   }
 
@@ -93,9 +112,9 @@
     const t = Date.parse(x.iniciada_em);
     return Number.isFinite(t) && t >= inicioMs;
   };
-  const valida = (x) => x.chave && x.chat && !/@g\.us$|status@broadcast/.test(x.chat);
+  const valida = (x) => x.chave && x.chave !== 'w-' && x.chat && !/@g\.us$|status@broadcast/.test(x.chat);
 
-  async function lerDoDia(inicioMs) {
+  async function lerDoDia(inicioMs, meuAparelho) {
     const achadas = new Map();
     const fontes = [];
     for (const nome of BANCOS) {
@@ -118,7 +137,7 @@
           const doRegistro = Array.from(achadas.values());
           const repetida = (x) => doRegistro.some((y) => y.chat === x.chat && y.direcao === x.direcao
             && Math.abs(Date.parse(y.iniciada_em) - Date.parse(x.iniciada_em)) <= 120000);
-          msgs.map(deMensagem).filter(valida).filter(ehDoDia(inicioMs)).filter((x) => !repetida(x))
+          msgs.map((m) => deMensagem(m, meuAparelho)).filter(valida).filter(ehDoDia(inicioMs)).filter((x) => !repetida(x))
             .forEach((x) => { if (!achadas.has(x.chave)) achadas.set(x.chave, x); });
           fontes.push('message:' + msgs.length);
         }
@@ -155,5 +174,5 @@
     return saida;
   }
 
-  globalThis.LeitorLigacoes = { lerDoDia, diagnostico, deMensagem, deRegistro, resultado };
+  globalThis.LeitorLigacoes = { lerDoDia, diagnostico, deMensagem, deRegistro, resultado, partesDoId, aparelhoDe };
 })();

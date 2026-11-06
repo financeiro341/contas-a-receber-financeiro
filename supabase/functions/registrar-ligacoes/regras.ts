@@ -19,7 +19,8 @@ export function inicioAceito(agora: number): number {
 
 export function validarLigacao(x: any, agora: number): { ok: true; v: any } | { ok: false; motivo: string } {
   const chave = String(x?.chave ?? "");
-  if (!/^[A-Za-z0-9_.:@-]{4,120}$/.test(chave)) return { ok: false, motivo: "chave" };
+  // Chave da versão 0.2.0 em diante ("w-<id da mensagem>"); a 0.1.0 gravava a direção errada e fica recusada.
+  if (!/^w-[A-Za-z0-9_.:@-]{3,118}$/.test(chave)) return { ok: false, motivo: "chave" };
   const chat = normalizarChat(x?.chat);
   if (!chat) return { ok: false, motivo: "chat" };
   if (!DIRECOES.has(x?.direcao)) return { ok: false, motivo: "direcao" };
@@ -30,6 +31,9 @@ export function validarLigacao(x: any, agora: number): { ok: true; v: any } | { 
   if (!Number.isFinite(quando) || quando > agora + 10 * 60_000 || quando < inicioAceito(agora)) return { ok: false, motivo: "data" };
   const d = x?.duracao_seg;
   const duracao = Number.isInteger(d) && d >= 0 && d <= 86_400 ? d : null;
-  return { ok: true, v: { chave, chat, direcao: x.direcao, resultado, duracao, video: x?.video === true, iniciada_em: new Date(quando).toISOString() } };
+  // deste_computador: a ligação feita saiu do computador onde está a extensão (true), de outro aparelho do mesmo
+  // número (false) ou não deu para saber (null). Ligação recebida fica sempre null.
+  const deste = x?.direcao === "feita" && typeof x?.deste_computador === "boolean" ? x.deste_computador : null;
+  return { ok: true, v: { chave, chat, direcao: x.direcao, resultado, duracao, video: x?.video === true, iniciada_em: new Date(quando).toISOString(), deste_computador: deste } };
 }
 

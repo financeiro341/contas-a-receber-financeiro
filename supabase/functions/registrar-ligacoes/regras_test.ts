@@ -5,7 +5,7 @@ function assertEquals(a: unknown, b: unknown) {
 import { inicioAceito, normalizarChat, validarLigacao } from "./regras.ts";
 
 const agora = Date.parse("2026-11-06T15:00:00Z");
-const base = { chave: "CALL1", chat: "557599990000@c.us", direcao: "feita", resultado: "atendida", duracao_seg: 33, iniciada_em: "2026-11-06T14:00:00Z" };
+const base = { chave: "w-CALL1", chat: "557599990000@c.us", direcao: "feita", resultado: "atendida", duracao_seg: 33, iniciada_em: "2026-11-06T14:00:00Z" };
 
 Deno.test("normaliza o chat do WhatsApp Web para o formato do banco", () => {
   assertEquals(normalizarChat("557599990000@c.us"), "557599990000@s.whatsapp.net");
@@ -18,7 +18,7 @@ Deno.test("aceita a ligação completa e recusa o que não serve", () => {
   const r = validarLigacao(base, agora);
   assertEquals(r.ok, true);
   if (r.ok) assertEquals(r.v.chat, "557599990000@s.whatsapp.net");
-  assertEquals(validarLigacao({ ...base, chave: "x" }, agora), { ok: false, motivo: "chave" });
+  assertEquals(validarLigacao({ ...base, chave: "true_111@lid_ABC" }, agora), { ok: false, motivo: "chave" });
   assertEquals(validarLigacao({ ...base, direcao: "outra" }, agora), { ok: false, motivo: "direcao" });
   assertEquals(validarLigacao({ ...base, iniciada_em: "2026-10-01T14:00:00Z" }, agora), { ok: false, motivo: "data" });
   assertEquals(validarLigacao({ ...base, iniciada_em: "2026-11-06T16:00:00Z" }, agora), { ok: false, motivo: "data" });
@@ -38,4 +38,13 @@ Deno.test("início aceito: meia-noite da Bahia, com a tolerância até 01h", () 
   assertEquals(new Date(inicioAceito(Date.parse("2026-11-06T15:00:00Z"))).toISOString(), "2026-11-06T03:00:00.000Z");
   assertEquals(new Date(inicioAceito(Date.parse("2026-11-06T03:40:00Z"))).toISOString(), "2026-11-05T03:00:00.000Z");
   assertEquals(new Date(inicioAceito(Date.parse("2026-11-06T02:40:00Z"))).toISOString(), "2026-11-05T03:00:00.000Z");
+});
+
+Deno.test("aparelho da ligação: só vale para ligação feita", () => {
+  const f = validarLigacao({ ...base, deste_computador: false }, agora);
+  assertEquals(f.ok && f.v.deste_computador, false);
+  const r = validarLigacao({ ...base, direcao: "recebida", deste_computador: true }, agora);
+  assertEquals(r.ok && r.v.deste_computador, null);
+  const n = validarLigacao({ ...base, deste_computador: "sim" }, agora);
+  assertEquals(n.ok && n.v.deste_computador, null);
 });

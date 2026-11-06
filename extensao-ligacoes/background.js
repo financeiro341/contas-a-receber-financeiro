@@ -11,7 +11,7 @@ async function novasOuMudadas(ligacoes) {
   const { enviadas = {} } = await chrome.storage.local.get('enviadas');
   const hoje = new Date().toISOString().slice(0, 10);
   const limpas = Object.fromEntries(Object.entries(enviadas).filter(([, v]) => v.dia >= hoje.slice(0, 8) + '01'));
-  const marca = (x) => `${x.resultado}|${x.duracao_seg ?? ''}`;
+  const marca = (x) => `${x.resultado}|${x.duracao_seg ?? ''}|${x.deste_computador}`;
   const mandar = ligacoes.filter((x) => !limpas[x.chave] || limpas[x.chave].marca !== marca(x));
   return { mandar, limpas, marca };
 }
