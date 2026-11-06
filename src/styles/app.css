@@ -555,3 +555,10 @@ html.travado body { padding-right: var(--barra, 0px); }
 .busca-resultados .trecho .ti { margin-right: 4px; }
 .busca-resultados mark { background: var(--accent-chip-bg); color: var(--accent-chip-text); border-radius: 3px; padding: 0 1px; }
 .balao.destaque { outline: 3px solid var(--accent); outline-offset: 2px; transition: outline-color .4s; }
+
+/* Ligações automáticas (extensão do Chrome), só para administrador. */
+.lista-extensao { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 4px; }
+.lista-extensao li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid var(--border); }
+.extensao-novo { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
+.extensao-novo input { flex: 1 1 200px; min-width: 0; padding: 8px 10px; border: 1px solid var(--border-campo); border-radius: var(--radius-md); background: var(--bg-subtle); color: var(--text-primary); font: inherit; }
+.codigo-extensao { display: block; margin-top: 6px; padding: 6px 8px; border-radius: var(--radius-sm); background: var(--bg-subtle); word-break: break-all; font-size: 13px; user-select: all; }

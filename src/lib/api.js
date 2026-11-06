@@ -108,6 +108,11 @@ async function postar(corpo) {
 }
 
 export const enviarTexto = (contato, texto) => postar({ acao: 'enviar_texto', contato, texto });
+
+// Extensão de ligações do Chrome (06/11/2026): só administrador gera o código e desliga.
+export const lerExtensoes = () => ler({ acao: 'extensoes' });
+export const gerarCodigoExtensao = (nome) => postar({ acao: 'extensao_codigo', nome });
+export const desligarExtensao = (id) => postar({ acao: 'extensao_revogar', id });
 export const enviarArquivo = (contato, { nome, mimetype, base64, legenda }) => postar({ acao: 'enviar_arquivo', contato, nome, mimetype, base64, legenda });
 export const criarNota = (contato, texto) => postar({ acao: 'nota', contato, texto });
 export const apagarNota = (id) => postar({ acao: 'nota_apagar', id });

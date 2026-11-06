@@ -7,6 +7,7 @@ import Login from './components/Login.jsx';
 import { alternarTema } from './utils/tema.js';
 import Hoje from './components/Hoje.jsx';
 import Atendimento from './components/Atendimento.jsx';
+import ExtensaoLigacoes from './components/ExtensaoLigacoes.jsx';
 import Historico, { INICIO_DADOS } from './components/Historico.jsx';
 import Omie from './components/Omie.jsx';
 import Conversa from './components/Conversa.jsx';
@@ -165,6 +166,7 @@ export default function App() {
         {aba === 'hoje' && <Hoje dia={dia} ehHoje={ehHoje} abrirConversa={abrirConversa} abrirNaCaixa={abrirNaCaixa} />}
         {aba === 'conversas' && <Caixa eu={eu} contatoPedido={pedidoCaixa} />}
         {aba === 'atendimento' && <Atendimento dia={dia} ehHoje={ehHoje} abrirConversa={abrirConversa} />}
+        {aba === 'atendimento' && eu?.papel === 'admin' && <ExtensaoLigacoes />}
         {aba === 'historico' && <Historico dia={dia} abrirDia={(d) => { setDia(d); setAba('hoje'); }} />}
         {aba === 'omie' && <Omie abrirConversa={abrirConversa} eu={eu} />}
       </main>

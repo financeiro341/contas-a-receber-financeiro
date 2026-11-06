@@ -792,6 +792,28 @@ async function tratarPost(u: Usuario, corpo: any) {
       await evento(l.contato_id, u, "ligacao_desfeita", {});
       return { ok: true };
     }
+    case "extensao_codigo": {
+      // Código de ligação da extensão de ligações (06/11/2026): só administrador gera; aparece uma vez só, aqui;
+      // no banco fica só o resumo sha256. Quem tem o código só consegue GRAVAR ligações (função registrar-ligacoes).
+      if (u.papel !== "admin") throw new Erro(403, "Só um administrador gera o código da extensão.");
+      const nome = String(corpo.nome ?? "").trim().slice(0, 60);
+      if (!nome) throw new Erro(400, "Dê um nome ao computador (por exemplo, \"Maria Clara (174)\").");
+      const bytes = crypto.getRandomValues(new Uint8Array(32));
+      const codigo = btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+      const resumo = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(codigo))))
+        .map((b) => b.toString(16).padStart(2, "0")).join("");
+      const [a] = await rest("extensao_aparelhos", {
+        method: "POST",
+        body: JSON.stringify({ nome, token_sha256: resumo, criado_por: u.id, criado_por_nome: u.nome }),
+      });
+      return { ok: true, id: a.id, nome, codigo };
+    }
+    case "extensao_revogar": {
+      if (u.papel !== "admin") throw new Erro(403, "Só um administrador desliga a extensão.");
+      const id = inteiro(corpo.id, "Computador");
+      await rest(`extensao_aparelhos?id=eq.${id}&revogado_em=is.null`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ revogado_em: new Date().toISOString(), revogado_por: u.id }) });
+      return { ok: true };
+    }
     default:
       throw new Erro(400, "Ação desconhecida.");
   }
@@ -961,6 +983,9 @@ Deno.serve(async (req) => {
         return json(await equipe(usuario), 200, h);
       case "respostas":
         return json(await rest("respostas_prontas?select=id,titulo,texto,criada_por,criada_por_nome&apagada_em=is.null&order=titulo"), 200, h);
+      case "extensoes":
+        // Situação da extensão de ligações em cada computador (sem o resumo do código).
+        return json(await rest("extensao_aparelhos?select=id,nome,criado_por_nome,criado_em,revogado_em,ultimo_contato,ultima_versao,ultimo_resumo&order=id"), 200, h);
       default:
         return json({ erro: "Ação desconhecida." }, 400, h);
     }

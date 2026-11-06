@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "Ligações do Financeiro (Castelo Branco)",
+  "short_name": "Ligações CBC",
+  "version": "0.1.0",
+  "description": "Lê o histórico de ligações do WhatsApp Web do financeiro e grava no sistema do contas a receber. Só lê: não clica, não envia e não marca nada como lido.",
+  "permissions": ["storage"],
+  "host_permissions": [
+    "https://web.whatsapp.com/*",
+    "https://mhihrbchidudhgvpouia.supabase.co/functions/v1/registrar-ligacoes"
+  ],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [
+    {
+      "matches": ["https://web.whatsapp.com/*"],
+      "js": ["leitor.js", "content.js"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
+  "options_page": "opcoes.html",
+  "action": { "default_title": "Ligações do Financeiro", "default_popup": "opcoes.html" },
+  "icons": { "128": "icone-128.png" }
+}
