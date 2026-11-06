@@ -69,10 +69,19 @@ function Dinheiro({ valor }) {
 const mil = (v) => (Math.abs(v) >= 1000 ? `${(v / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}\u00a0mil` : brl(v).replace(/,00$/, ''));
 const comReal = (t) => (t.startsWith('R$') ? t : `R$\u00a0${t}`);
 
-// Dias úteis de um mês (AAAA-MM-01 até o último dia), sem feriados.
+// Feriados com os bancos fechados: a mesma lista das automações (processo-faturas-contas-a-pagar.md e processo-cheques.md),
+// até 25/12/2027. Feriado municipal de Feira de Santana entra quando o Marcus informar.
+const FERIADOS = new Set([
+  '2026-10-12', '2026-11-02', '2026-11-15', '2026-11-20', '2026-12-25',
+  '2027-01-01', '2027-02-08', '2027-02-09', '2027-03-26', '2027-04-21', '2027-05-27',
+  '2027-07-02', '2027-09-07', '2027-10-12', '2027-11-02', '2027-11-15', '2027-11-22', '2027-12-25',
+]);
+
+// Dias úteis de um mês (AAAA-MM-01 até o último dia), sem sábado, domingo e feriados: nesses dias o Omie não muda
+// (ninguém dá baixa), então o dia útil seguinte já mostra o efeito deles.
 function diasUteis(inicio, fim) {
   const lista = [];
-  for (let d = inicio; d <= fim; d = somarDias(d, 1)) if (![0, 6].includes(diaSemana(d))) lista.push(d);
+  for (let d = inicio; d <= fim; d = somarDias(d, 1)) if (![0, 6].includes(diaSemana(d)) && !FERIADOS.has(d)) lista.push(d);
   return lista;
 }
 
