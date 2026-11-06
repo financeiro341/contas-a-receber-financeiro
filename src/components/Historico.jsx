@@ -9,10 +9,20 @@ export const INICIO_DADOS = '2026-11-01';
 const PERIODOS = [['7', '7 dias'], ['30', '30 dias'], ['mes', 'Mês do dia escolhido']];
 
 // Visual novo (06/11/2026): mesmo molde da Cobrança do dia e do Atendimento.
+// Início de cada período, sem passar de 01/11/2026 (antes disso não há dados).
+function inicioDe(periodo, dia) {
+  const de = periodo === 'mes' ? `${dia.slice(0, 8)}01` : somarDias(dia, -(Number(periodo) - 1));
+  return de < INICIO_DADOS ? INICIO_DADOS : de;
+}
+
 export default function Historico({ dia, abrirDia }) {
   const [periodo, setPeriodo] = useState('30');
-  let de = periodo === 'mes' ? `${dia.slice(0, 8)}01` : somarDias(dia, -(Number(periodo) - 1));
-  if (de < INICIO_DADOS) de = INICIO_DADOS;
+  // Só aparecem os períodos que mudam alguma coisa (pedido do Marcus, 06/11/2026): no começo dos dados os três davam o
+  // mesmo intervalo e os botões pareciam quebrados. Com dois períodos iguais, fica o primeiro deles.
+  const vistos = new Set();
+  const opcoes = PERIODOS.filter(([k]) => { const de = inicioDe(k, dia); return vistos.has(de) ? false : vistos.add(de); });
+  const escolhido = opcoes.some(([k]) => k === periodo) ? periodo : (opcoes.find(([k]) => inicioDe(k, dia) === inicioDe(periodo, dia)) || opcoes[0])[0];
+  const de = inicioDe(escolhido, dia);
   const { dados, erro, carregando, recarregar } = useDados(() => lerHistorico(de, dia), [de, dia]);
   const dias = dados?.dias || [];
   const soma = (k) => dias.reduce((s, d) => s + (Number(d[k]) || 0), 0);
@@ -49,12 +59,16 @@ export default function Historico({ dia, abrirDia }) {
           <p className="data-pagina">{de === dia ? dataLonga(dia) : `De ${dataCurta(de)} a ${dataCurta(dia)}`}</p>
         </div>
         <div className="estado-leitura">
-          <div className="periodos" role="group" aria-label="Período">
-            {PERIODOS.map(([k, r]) => <button key={k} type="button" aria-pressed={periodo === k} onClick={() => setPeriodo(k)}>{r}</button>)}
-          </div>
+          {opcoes.length > 1 ? (
+            <div className="periodos" role="group" aria-label="Período">
+              {opcoes.map(([k, r]) => <button key={k} type="button" aria-pressed={escolhido === k} onClick={() => setPeriodo(k)}>{r}</button>)}
+            </div>
+          ) : (
+            <span className="selo-periodo">Tudo desde 01/11/2026</span>
+          )}
         </div>
       </div>
-      <p className="nota-periodo">Só dias úteis. Os dados começam em 01/11/2026.</p>
+      <p className="nota-periodo">Só dias úteis. Os dados começam em 01/11/2026{opcoes.length > 1 ? '' : ': até lá, 7 dias, 30 dias e o mês dão o mesmo período, por isso a escolha aparece só quando fizer diferença'}.</p>
       <Estado carregando={carregando} erro={erro} recarregar={recarregar}>
         <section className="grade g-kpi4" aria-label="Resumo do período">
           <Kpi icone="ti-send" rotulo="Cobranças no período" valor={inteiro(cobrados)} apoio={`${dias.length} ${dias.length === 1 ? 'dia' : 'dias'} com cobrança`} />
