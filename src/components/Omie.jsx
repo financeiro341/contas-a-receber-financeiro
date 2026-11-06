@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { lerDia, lerOmie, lerOmieAgora } from '../lib/api.js';
 import { dadosDoDia, gerarPdf, nomeDoArquivo } from '../utils/relatorioPdf.js';
 import leao from '../assets/leao.png';
@@ -78,10 +78,23 @@ function diasUteis(inicio, fim) {
 
 // Aba Omie no visual novo (aprovado pelo Marcus, 06/11/2026): faixa do ano com o anel recebido x inadimplência e o que entrou
 // no caixa hoje; o mês em régua (recebido, inadimplente, a vencer) e faturado x entrou; os maiores atrasos dos cobrados; e a
-// inadimplência do mês dia a dia, pelos relatórios das 17h30. Só consulta ao Omie.
+// inadimplência do mês dia a dia, pelo último cálculo de cada dia. Só consulta ao Omie.
 export default function Omie({ abrirConversa, eu }) {
   const { dados, erro, carregando, recarregar, atualizar } = useDados(() => lerOmie(), []);
   const [todos, setTodos] = useState(false);
+  // Tudo pela API (decisão do Marcus, 06/11/2026, 14h27): ao abrir a aba, se o último cálculo tem mais de 30 minutos (ou é
+  // de outro dia), o sistema consulta o Omie de novo (só consulta) e mostra o anterior enquanto isso.
+  const [auto, setAuto] = useState(null); // null | 'calculando' | 'ok' | { erro }
+  const pediu = useRef(false);
+  useEffect(() => {
+    if (!dados || pediu.current) return;
+    const ultimo = Date.parse(dados.financeiro?.atualizado || '');
+    const velho = Number.isNaN(ultimo) || Date.now() - ultimo > 30 * 60_000 || (dados.financeiro?.totais_ate || '') !== hoje();
+    if (!velho) return;
+    pediu.current = true;
+    setAuto('calculando');
+    lerOmieAgora(false).then(() => { setAuto('ok'); atualizar(); }).catch((e) => setAuto({ erro: e.message }));
+  }, [dados]); // eslint-disable-line react-hooks/exhaustive-deps
   const f = dados?.financeiro || null;
   const mes = f?.inicio_mes ? nomeMes(f.inicio_mes) : '';
   const ano = String(f?.inicio || '').slice(0, 4);
@@ -119,7 +132,10 @@ export default function Omie({ abrirConversa, eu }) {
           <p className="data-pagina">{ano ? `Carteira de ${ano}` : 'Carteira'}</p>
         </div>
         <div className="estado-leitura omie-acoes">
-          {f?.atualizado && <span><span className="luz ok" aria-hidden="true" />Calculado no Omie {quando(f.atualizado)}</span>}
+          {auto === 'calculando'
+            ? <span role="status"><i className="ti ti-loader-2 girando" aria-hidden="true" />Atualizando com o Omie{f?.atualizado ? `, mostrando o cálculo de ${quando(f.atualizado)}` : ''}</span>
+            : f?.atualizado && <span><span className="luz ok" aria-hidden="true" />Calculado no Omie {quando(f.atualizado)}</span>}
+          {auto?.erro && <span className="selo regras">Não deu para atualizar agora: {auto.erro}</span>}
           <BaixarRelatorio eu={eu} aoCalcular={atualizar} />
         </div>
       </div>
@@ -144,7 +160,7 @@ export default function Omie({ abrirConversa, eu }) {
                 <span className="rot"><span className="luz-verde" aria-hidden="true" />{entrouHoje != null && entrouHoje >= 0 ? `Entrou no caixa ${rotuloDia}` : `Entrou no caixa em ${mes}`}</span>
                 <b><Dinheiro valor={entrouHoje != null && entrouHoje >= 0 ? entrouHoje : f.recebido_no_mes} /></b>
                 {entrouHoje != null && entrouHoje >= 0
-                  ? <small>{inteiro(recebimentosHoje)} {recebimentosHoje === 1 ? 'recebimento' : 'recebimentos'} desde o relatório de {dataCurta(anterior.dia)}</small>
+                  ? <small>{inteiro(recebimentosHoje)} {recebimentosHoje === 1 ? 'recebimento' : 'recebimentos'} desde o último cálculo de {dataCurta(anterior.dia)}</small>
                   : <small>{f.titulos_recebidos_no_mes != null ? `${inteiro(f.titulos_recebidos_no_mes)} recebimentos` : 'recebimentos de qualquer vencimento'}</small>}
                 {entrouHoje != null && entrouHoje >= 0 && <span className="omie-hoje-mes">No mês: {brl(f.recebido_no_mes)}</span>}
               </div>
@@ -213,12 +229,12 @@ export default function Omie({ abrirConversa, eu }) {
 
           {f.inicio_mes && dias.length > 0 && (
             <>
-              <div className="omie-secao"><h2>Inadimplência de {mes}, dia a dia</h2><span>títulos que venceram no mês e seguem em aberto, no relatório das 17h30 de cada dia</span></div>
+              <div className="omie-secao"><h2>Inadimplência de {mes}, dia a dia</h2><span>títulos que venceram no mês e seguem em aberto, no último cálculo de cada dia</span></div>
               <section className="cartao" aria-label={`Inadimplência de ${mes} por dia`}>
                 <div className="omie-inad-topo">
                   <div><span className="rot">{rotuloDia.charAt(0).toUpperCase() + rotuloDia.slice(1)}</span><b><Dinheiro valor={f.inadimplencia_mes} /></b>{f.titulos_inadimplentes_mes != null && <small>{inteiro(f.titulos_inadimplentes_mes)} títulos vencidos em aberto</small>}</div>
                   {deltaMes != null && deltaMes !== 0 && (
-                    <p className={`omie-delta ${deltaMes > 0 ? 'sobe' : 'cai'}`}><b>{deltaMes > 0 ? '↑' : '↓'} {comReal(mil(Math.abs(deltaMes)))}</b>{deltaMes > 0 ? 'a mais' : 'a menos'} que no relatório de {dataCurta(anterior.dia)}</p>
+                    <p className={`omie-delta ${deltaMes > 0 ? 'sobe' : 'cai'}`}><b>{deltaMes > 0 ? '↑' : '↓'} {comReal(mil(Math.abs(deltaMes)))}</b>{deltaMes > 0 ? 'a mais' : 'a menos'} que no último cálculo de {dataCurta(anterior.dia)}</p>
                   )}
                 </div>
                 <div className="omie-dias" role="img" aria-label={dias.filter((d) => d in porDia).map((d) => `${dataCurta(d)}: ${brl(porDia[d])}`).join('; ')}>
@@ -234,7 +250,7 @@ export default function Omie({ abrirConversa, eu }) {
                     );
                   })}
                 </div>
-                {dias.some((d) => d < diaCalc && !(d in porDia)) && <p className="mini omie-sem-nota">Dia sem barra: não há relatório das 17h30 gravado naquele dia.</p>}
+                {dias.some((d) => d < diaCalc && !(d in porDia)) && <p className="mini omie-sem-nota">Dia sem barra: ninguém consultou o Omie pelo sistema naquele dia.</p>}
               </section>
             </>
           )}
