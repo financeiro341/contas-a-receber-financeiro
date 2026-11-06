@@ -764,7 +764,7 @@ select.wa-chip { appearance: none; padding-right: 28px; background-image: linear
 .conversa-corpo { background: transparent; padding: 12px 6% 10px; display: flex; flex-direction: column; gap: 2px; }
 .sep-dia { margin: 10px 0 8px; }
 .sep-dia span { background: var(--wa-painel); color: var(--wa-apagado); border: 0; border-radius: 8px; padding: 5px 12px; font-size: 12.5px; font-weight: 500; box-shadow: var(--wa-sombra-bolha); }
-.caixa .balao { max-width: min(65%, 600px); margin: 0; padding: 6px 8px 8px 9px; border: 0; border-radius: 8px; box-shadow: var(--wa-sombra-bolha); color: var(--wa-texto); font-size: 14.2px; line-height: 1.4; position: relative; }
+.caixa .balao { display: flow-root; max-width: min(65%, 600px); margin: 0; padding: 6px 8px 8px 9px; border: 0; border-radius: 8px; box-shadow: var(--wa-sombra-bolha); color: var(--wa-texto); font-size: 14.2px; line-height: 1.4; position: relative; }
 .caixa .balao.cliente { align-self: flex-start; background: var(--wa-dele); }
 .caixa .balao.nos { align-self: flex-end; background: var(--wa-nossa); margin-left: 0; }
 .caixa .balao.cauda { margin-top: 8px; }
@@ -775,6 +775,7 @@ select.wa-chip { appearance: none; padding-right: 28px; background-image: linear
 .caixa .balao.nos.cauda::before { right: -8px; background: var(--wa-nossa); clip-path: polygon(0 0, 100% 0, 0 100%); }
 .caixa .balao .hora { display: inline-flex; float: right; gap: 3px; align-items: center; margin: 6px 0 -4px 12px; position: relative; top: 4px; font-size: 11px; color: var(--wa-hora); white-space: nowrap; }
 .caixa .balao .hora .autor { font-weight: 600; }
+.caixa .balao.falhou .hora, .caixa .balao.incerto .hora, .caixa .balao.pendente .hora { white-space: normal; float: none; display: flex; justify-content: flex-end; text-align: right; top: 0; margin: 6px 0 0; }
 .caixa .balao .hora .ti { font-size: 16px; }
 .caixa .balao .hora .lida { color: var(--wa-lida); }
 .caixa .balao .arquivo { display: flex; gap: 10px; align-items: center; background: rgba(0,0,0,.05); border-radius: 6px; padding: 10px; margin-bottom: 4px; font-weight: 500; color: var(--wa-texto); overflow-wrap: anywhere; }
@@ -825,7 +826,7 @@ select.wa-chip { appearance: none; padding-right: 28px; background-image: linear
 .conversa-detalhes .bloco-det { background: var(--wa-painel); border-bottom: 0; padding: 14px 20px; margin-bottom: 10px; }
 .conversa-detalhes .bloco-det h4 { color: var(--wa-apagado); font-weight: 500; font-size: 13.5px; }
 .conversa-detalhes > .aviso { margin: 0 12px 10px; }
-.perfil-det { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 4px; padding: 24px 20px 20px !important; }
+.conversa-detalhes .perfil-det { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 4px; padding: 24px 20px 20px; }
 .perfil-det b { margin-top: 10px; font-size: 20px; font-weight: 500; color: var(--wa-texto); overflow-wrap: anywhere; }
 .perfil-det span:not(.avatar) { color: var(--wa-apagado); font-size: 14px; }
 .conversa-detalhes .notas li { background: var(--warning-subtle); }
@@ -841,5 +842,4 @@ select.wa-chip { appearance: none; padding-right: 28px; background-image: linear
   .lista-cabeca { padding-left: 16px; }
   .caixa .conversa-topo { gap: 2px; padding: 0 6px; }
   .caixa .conversa-topo .botao.icone, .caixa .conversa-topo .acao-topo { width: 36px; height: 36px; min-height: 36px; }
-  .caixa .conversa-topo [aria-label="Buscar nesta conversa"], .quem-topo .sub .chip { display: none; }
 }

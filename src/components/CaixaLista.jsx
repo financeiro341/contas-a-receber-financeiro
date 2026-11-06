@@ -94,7 +94,7 @@ export default function CaixaLista({ itens, carregando, erro, recarregar, aberto
             </button>
           ))}
           <label className="so-leitor" htmlFor="etq">Etiqueta</label>
-          <select id="etq" className="wa-chip wa-chip-lista" value={f.etiqueta} onChange={(e) => setF({ ...f, etiqueta: e.target.value })}>
+          <select id="etq" className="wa-chip" value={f.etiqueta} onChange={(e) => setF({ ...f, etiqueta: e.target.value })}>
             <option value="">Etiquetas</option>
             {etiquetas.map((e) => <option key={e.id} value={String(e.id)}>{e.nome}</option>)}
           </select>
@@ -121,7 +121,7 @@ export default function CaixaLista({ itens, carregando, erro, recarregar, aberto
                         {c.ultima_de_nos && <i className="ti ti-checks" role="img" aria-label="Nossa:" />}
                         {c.ultima_texto || (c.ultima_tipo === 'audioMessage' ? 'Áudio' : c.ultima_tipo === 'imageMessage' ? 'Imagem' : 'Mensagem')}
                       </span>
-                      {c.sem_ler > 0 && <span className="contador" aria-label={`${c.sem_ler} sem ler`}>{c.sem_ler}</span>}
+                      {c.sem_ler > 0 && <span className="contador" aria-label={`${c.sem_ler} ${c.sem_ler === 1 ? 'não lida' : 'não lidas'}`}>{c.sem_ler}</span>}
                     </span>
                     {((c.empresas || []).length > 0 || c.dono || c.retorno || c.resolvida || (c.etiquetas || []).length > 0) && (
                       <span className="linha3">
