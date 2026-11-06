@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { aoMudarSessao, lerAtendimento, lerCaixa, lerEu, sair, sessaoAtual } from './lib/api.js';
+import { aoMudarSessao, lerCaixa, lerEu, sair, sessaoAtual } from './lib/api.js';
 import { dataLonga, diaSemana, diaUtilAnterior, hoje, somarDias } from './utils/formato.js';
 import { iniciais, useDados } from './components/comum.jsx';
 import leao from './assets/leao.png';
@@ -24,16 +24,6 @@ const ABAS = [
 function diaInicial() {
   const h = hoje();
   return [0, 6].includes(diaSemana(h)) ? diaUtilAnterior(h) : h;
-}
-
-// Na aba Atendimento: quantos clientes esperam resposta hoje com a última mensagem ainda não lida.
-// Quem já foi lido e não respondido fica fora do número (pode ser um "obrigado" que encerra a conversa).
-function ContagemEspera() {
-  const { dados } = useDados(() => lerAtendimento(hoje()), [], 120000);
-  const lista = (dados?.aguardando || []).filter((c) => c.lida === false);
-  if (!lista.length) return null;
-  const atrasado = lista.some((c) => c.minutos > 60);
-  return <span className={`contador${atrasado ? ' atrasado' : ''}`} aria-label={`${lista.length} sem ler`} title={`${lista.length} ${lista.length > 1 ? 'mensagens' : 'mensagem'} de cliente sem ler`}>{lista.length}</span>;
 }
 
 // Na aba Conversas: quantas conversas de clientes têm mensagem sem ler (últimos 30 dias).
@@ -146,7 +136,6 @@ export default function App() {
             {ABAS.map((a) => (
               <button key={a.id} role="tab" type="button" aria-selected={aba === a.id} onClick={() => setAba(a.id)}>
                 <i className={`ti ${a.icone}`} aria-hidden="true" /><span className="nome-longo">{a.nome}</span><span className="nome-curto">{a.curto}</span>
-                {a.id === 'atendimento' && <ContagemEspera />}
                 {a.id === 'conversas' && <ContagemSemLer aoContar={setSemLer} aoAbrir={abrirNaCaixa} />}
               </button>
             ))}
@@ -161,7 +150,7 @@ export default function App() {
       </header>
       <main className={aba === 'conversas' ? 'main-caixa' : undefined}>
         <h1 className="so-leitor">{abaAtual?.nome}</h1>
-        {usaDia && aba !== 'hoje' && <p className="data-pagina">{aba === 'historico' ? `Até ${dataLonga(dia)}` : dataLonga(dia)}</p>}
+        {usaDia && aba !== 'hoje' && aba !== 'atendimento' && <p className="data-pagina">{aba === 'historico' ? `Até ${dataLonga(dia)}` : dataLonga(dia)}</p>}
         {aba === 'hoje' && <Hoje dia={dia} ehHoje={ehHoje} nome={eu?.nome} abrirConversa={abrirConversa} abrirNaCaixa={abrirNaCaixa} />}
         {aba === 'conversas' && <Caixa eu={eu} contatoPedido={pedidoCaixa} />}
         {aba === 'atendimento' && <Atendimento dia={dia} ehHoje={ehHoje} abrirConversa={abrirConversa} />}

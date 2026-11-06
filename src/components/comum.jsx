@@ -127,7 +127,7 @@ export function Barras({ rotulos, series, altura = 170 }) {
   const descricao = rotulos.map((r, i) => `${r}: ${series.map((s) => `${s.valores[i]} ${s.nome}`).join(', ')}`).join('; ');
   return (
     <div className="grafico">
-      <div className={`barras${densas}`} style={{ height: altura }} role="img" aria-label={descricao}>
+      <div className={`barras${densas}`} style={altura ? { height: altura } : undefined} role="img" aria-label={descricao}>
         {rotulos.map((r, i) => (
           <div className="col" key={r}>
             <div className="par">
