@@ -113,14 +113,17 @@ export default function Omie({ abrirConversa, eu }) {
   const pctMes = (v) => (totalMes ? Math.round((n(v) / totalMes) * 100) : 0);
   const entrouHoje = mesmoMes ? n(f?.recebido_no_mes) - n(anterior.recebido_no_mes) : null;
   const recebimentosHoje = mesmoMes ? n(f?.titulos_recebidos_no_mes) - n(anterior.titulos_recebidos_no_mes) : null;
-  const deltaMes = mesmoMes ? n(f?.inadimplencia_mes) - n(anterior.inadimplencia_mes) : null;
+  // Inadimplência do ano contra o último cálculo do dia anterior (pedido do Marcus, 06/11/2026, 14h42: ver se reduz a cada dia).
+  const deltaAno = anterior && anterior.inadimplencia_total != null ? n(f?.inadimplencia_total) - n(anterior.inadimplencia_total) : null;
 
-  // Inadimplência do mês, um ponto por dia útil: relatórios dos dias que passaram, o cálculo atual no dia dele, e os
-  // dias que ainda vão chegar em pontilhado.
-  const porDia = Object.fromEntries((dados?.evolucao || []).filter((e) => e.inicio_mes === f?.inicio_mes).map((e) => [e.dia, n(e.inadimplencia_mes)]));
-  if (f?.inicio_mes) porDia[diaCalc] = n(f.inadimplencia_mes);
+  // Inadimplência do ano em cada dia útil do mês (pedido do Marcus, 06/11/2026, 14h42): o último cálculo de cada dia que
+  // passou, o cálculo atual no dia dele, e os dias que ainda vão chegar em pontilhado.
+  const porDia = Object.fromEntries((dados?.evolucao || []).filter((e) => e.inicio_mes === f?.inicio_mes && e.inadimplencia_total != null).map((e) => [e.dia, n(e.inadimplencia_total)]));
+  if (f?.inicio_mes) porDia[diaCalc] = n(f.inadimplencia_total);
   const dias = f?.inicio_mes ? diasUteis(f.inicio_mes, f.fim_mes || diaCalc) : [];
+  // As barras partem de 90% do menor valor, para a variação de um dia para o outro aparecer; o valor exato vai em cima.
   const maxDia = Math.max(1, ...Object.values(porDia));
+  const baseDia = Math.min(maxDia, ...Object.values(porDia)) * 0.9;
   const atrasos = dados?.atrasos || [];
   const maxAtraso = Math.max(1, ...atrasos.map((c) => n(c.atraso_valor)));
 
@@ -229,12 +232,12 @@ export default function Omie({ abrirConversa, eu }) {
 
           {f.inicio_mes && dias.length > 0 && (
             <>
-              <div className="omie-secao"><h2>Inadimplência de {mes}, dia a dia</h2><span>títulos que venceram no mês e seguem em aberto, no último cálculo de cada dia</span></div>
-              <section className="cartao" aria-label={`Inadimplência de ${mes} por dia`}>
+              <div className="omie-secao"><h2>Inadimplência do ano, dia a dia em {mes}</h2><span>honorários vencidos de {dataCurta(f.inicio)} até o dia e ainda em aberto, no último cálculo de cada dia</span></div>
+              <section className="cartao" aria-label={`Inadimplência do ano em cada dia de ${mes}`}>
                 <div className="omie-inad-topo">
-                  <div><span className="rot">{rotuloDia.charAt(0).toUpperCase() + rotuloDia.slice(1)}</span><b><Dinheiro valor={f.inadimplencia_mes} /></b>{f.titulos_inadimplentes_mes != null && <small>{inteiro(f.titulos_inadimplentes_mes)} títulos vencidos em aberto</small>}</div>
-                  {deltaMes != null && deltaMes !== 0 && (
-                    <p className={`omie-delta ${deltaMes > 0 ? 'sobe' : 'cai'}`}><b>{deltaMes > 0 ? '↑' : '↓'} {comReal(mil(Math.abs(deltaMes)))}</b>{deltaMes > 0 ? 'a mais' : 'a menos'} que no último cálculo de {dataCurta(anterior.dia)}</p>
+                  <div><span className="rot">{rotuloDia.charAt(0).toUpperCase() + rotuloDia.slice(1)}</span><b><Dinheiro valor={f.inadimplencia_total} /></b>{f.titulos_inadimplentes != null && <small>{inteiro(f.titulos_inadimplentes)} títulos vencidos em aberto</small>}</div>
+                  {deltaAno != null && deltaAno !== 0 && (
+                    <p className={`omie-delta ${deltaAno > 0 ? 'sobe' : 'cai'}`}><b>{deltaAno > 0 ? '↑' : '↓'} {comReal(mil(Math.abs(deltaAno)))}</b>{deltaAno > 0 ? 'a mais' : 'a menos'} que no último cálculo de {dataCurta(anterior.dia)}</p>
                   )}
                 </div>
                 <div className="omie-dias" role="img" aria-label={dias.filter((d) => d in porDia).map((d) => `${dataCurta(d)}: ${brl(porDia[d])}`).join('; ')}>
@@ -244,7 +247,7 @@ export default function Omie({ abrirConversa, eu }) {
                     return (
                       <div key={d} className={`omie-dia${futuro ? ' futuro' : ''}${d === diaCalc ? ' atual' : ''}${!futuro && !temDado ? ' sem' : ''}`}>
                         <em>{temDado ? mil(porDia[d]) : ''}</em>
-                        <i style={temDado ? { height: `${(porDia[d] / maxDia) * 85}%` } : undefined} />
+                        <i style={temDado ? { height: `${maxDia > baseDia ? ((porDia[d] - baseDia) / (maxDia - baseDia)) * 80 + 8 : 50}%` } : undefined} />
                         <small>{d === diaCalc ? rotuloDia : d.slice(8, 10)}</small>
                       </div>
                     );
