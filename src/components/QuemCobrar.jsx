@@ -12,13 +12,29 @@ const FILTROS = [
   { id: 'feito', nome: 'Já falamos hoje', dica: 'Em atraso e já com mensagem nossa hoje' },
   { id: 'todos', nome: 'Todos', dica: 'Todos os clientes em atraso' },
 ];
+const GRUPOS = [
+  { id: 'todos', nome: 'Os dois grupos' },
+  { id: 'maior', nome: 'Maiores dívidas', dica: 'Os 40 que mais devem, somando todos os anos' },
+  { id: 'ano', nome: 'Dívidas do ano', dica: 'Honorário vencido de 01/01 até hoje' },
+];
+const FAIXAS = [
+  { id: 'todas', nome: 'Qualquer atraso', de: -Infinity, ate: Infinity },
+  { id: '30', nome: 'Até 30 dias', de: -Infinity, ate: 30 },
+  { id: '90', nome: '31 a 90 dias', de: 31, ate: 90 },
+  { id: '365', nome: '91 dias a 1 ano', de: 91, ate: 365 },
+  { id: 'mais', nome: 'Mais de 1 ano', de: 366, ate: Infinity },
+];
 const POR_PAGINA = 30;
 
 // Quem cobrar hoje (pedido do Marcus, 05/11/2026): clientes com honorários em atraso no Omie, do maior valor para o menor,
 // separando quem ainda não recebeu mensagem nossa hoje. O Omie é consultado na hora (só consulta) e o cálculo vale 10 minutos.
+// Desde 06/11/2026 a lista mistura dois grupos, com filtro: as 40 maiores dívidas de todos os anos e as dívidas do ano
+// (vencidas de 01/01 até o dia da cobrança); e filtra pela faixa de atraso (do título mais antigo).
 export default function QuemCobrar({ abrirNaCaixa }) {
   const [estado, setEstado] = useState(null); // null | 'lendo' | { dados } | { erro }
   const [filtro, setFiltro] = useState('falta');
+  const [grupo, setGrupo] = useState('todos');
+  const [faixa, setFaixa] = useState('todas');
   const [busca, setBusca] = useState('');
   const [mostrar, setMostrar] = useState(POR_PAGINA);
   // Recolher a lista (pedido do Marcus): a escolha fica guardada neste navegador.
@@ -33,23 +49,29 @@ export default function QuemCobrar({ abrirNaCaixa }) {
   }
 
   const d = estado?.dados;
+  // Grupo e faixa de atraso valem para os três botões (falta cobrar, já falamos, todos) e para a soma.
+  const base = useMemo(() => {
+    const fx = FAIXAS.find((f) => f.id === faixa) || FAIXAS[0];
+    return (d?.contatos || []).filter((c) => (grupo === 'todos' || (grupo === 'maior' ? c.maior : c.do_ano))
+      && c.dias_atraso >= fx.de && c.dias_atraso <= fx.ate);
+  }, [d, grupo, faixa]);
   const contagem = useMemo(() => {
-    const c = d?.contatos || [];
+    const c = base;
     return { falta: c.filter((x) => !x.falou_hoje).length, feito: c.filter((x) => x.falou_hoje).length, todos: c.length };
-  }, [d]);
+  }, [base]);
   const lista = useMemo(() => {
     const q = semAcento(busca);
-    return (d?.contatos || []).filter((c) => (filtro === 'todos' || (filtro === 'falta' ? !c.falou_hoje : c.falou_hoje))
+    return base.filter((c) => (filtro === 'todos' || (filtro === 'falta' ? !c.falou_hoje : c.falou_hoje))
       && (!q || semAcento(c.nome).includes(q) || (c.empresas || []).some((e) => semAcento(e).includes(q))));
-  }, [d, filtro, busca]);
-  const somaFalta = useMemo(() => (d?.contatos || []).filter((x) => !x.falou_hoje).reduce((s, x) => s + Number(x.valor || 0), 0), [d]);
+  }, [base, filtro, busca]);
+  const somaFalta = useMemo(() => base.filter((x) => !x.falou_hoje).reduce((s, x) => s + Number(x.valor || 0), 0), [base]);
 
   return (
     <section className={`cartao bloco quem-cobrar${recolhida ? ' recolhida' : ''}`} aria-labelledby="t-quem-cobrar">
       <div className="quem-cobrar-cabeca">
         <div>
           <h2 id="t-quem-cobrar"><i className="ti ti-target-arrow" aria-hidden="true" />Quem cobrar hoje{recolhida && d ? ` (${inteiro(contagem.falta)} a cobrar, ${brl(somaFalta)})` : ''}</h2>
-          <div className="sub">Clientes com honorários em atraso no Omie, do maior valor para o menor. "Falta cobrar" são os que ainda não receberam mensagem nossa hoje.</div>
+          <div className="sub">Honorários em atraso no Omie, do maior valor para o menor: as 40 maiores dívidas (todos os anos) e as dívidas do ano (vencidas de 01/01 até hoje). "Falta cobrar" são os que ainda não receberam mensagem nossa hoje.</div>
         </div>
         <button type="button" className="botao icone" onClick={alternar} aria-expanded={!recolhida} aria-controls="quem-cobrar-corpo"
           aria-label={recolhida ? 'Mostrar a lista Quem cobrar hoje' : 'Recolher a lista Quem cobrar hoje'} title={recolhida ? 'Mostrar' : 'Recolher'}>
@@ -80,6 +102,14 @@ export default function QuemCobrar({ abrirNaCaixa }) {
                 </button>
               ))}
             </div>
+            <div className="periodos" role="group" aria-label="Grupo">
+              {GRUPOS.map((x) => (
+                <button key={x.id} type="button" aria-pressed={grupo === x.id} title={x.dica} onClick={() => { setGrupo(x.id); setMostrar(POR_PAGINA); }}>{x.nome}</button>
+              ))}
+            </div>
+            <select className="faixa-atraso" aria-label="Faixa de atraso" value={faixa} onChange={(e) => { setFaixa(e.target.value); setMostrar(POR_PAGINA); }}>
+              {FAIXAS.map((x) => <option key={x.id} value={x.id}>{x.nome}</option>)}
+            </select>
             <div className="busca">
               <i className="ti ti-search" aria-hidden="true" />
               <input type="search" placeholder="Buscar cliente ou empresa" aria-label="Buscar em Quem cobrar hoje" value={busca} onChange={(e) => { setBusca(e.target.value); setMostrar(POR_PAGINA); }} />
@@ -102,7 +132,9 @@ export default function QuemCobrar({ abrirNaCaixa }) {
                     <span className="nome">{c.nome}</span>
                     {(c.empresas || []).length > 0 && <span className="empresa">{c.empresas[0]}{c.empresas.length > 1 ? ` +${c.empresas.length - 1}` : ''}</span>}
                     <span className="marcas">
-                      <span className={`etq ${c.dias_atraso > 30 ? 'cor-vermelho' : 'cor-amarelo'}`}>{c.dias_atraso > 0 ? `atraso desde ${dataCurta(c.mais_antigo)}` : 'vence hoje'}</span>
+                      <span className={`etq ${c.dias_atraso > 30 ? 'cor-vermelho' : 'cor-amarelo'}`}>{c.dias_atraso > 0 ? `atraso desde ${dataCurta(c.mais_antigo)}${c.dias_atraso > 365 ? `/${String(c.mais_antigo).slice(2, 4)}` : ''}` : 'vence hoje'}</span>
+                      {c.maior && <span className="etq cor-neutro"><i className="ti ti-trending-up" aria-hidden="true" />maior dívida</span>}
+                      {c.do_ano && c.valor_ano < c.valor && <span className="etq cor-neutro">do ano: {brl(c.valor_ano)}</span>}
                       {c.falou_hoje && <span className="etq cor-verde"><i className="ti ti-check" aria-hidden="true" />falamos às {hora(c.ultima_nossa)}</span>}
                       {!c.falou_hoje && c.ultima_nossa && <span className="etq cor-neutro">última mensagem nossa {dataCurta(diaDe(c.ultima_nossa))}</span>}
                       {!c.ultima_nossa && <span className="etq cor-neutro">nunca falamos pelo WhatsApp</span>}

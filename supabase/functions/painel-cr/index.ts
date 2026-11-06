@@ -36,10 +36,21 @@ const TIPOS_ARQUIVO: Record<string, { midia: "document" | "image"; ext: string[]
   "text/plain": { midia: "document", ext: ["txt"] },
   "application/zip": { midia: "document", ext: ["zip"] },
 };
+// Tira os caracteres invisíveis que invertem o texto (U+200E, U+200F, U+202A a U+202E, U+2066 a U+2069) e troca por "_"
+// os de controle (abaixo de U+0020) e os proibidos em nome de arquivo. Feito pelo código do caractere, sem sequência de escape:
+// a publicação pela ferramenta do Supabase converte essas sequências (06/11/2026).
+function limparNome(texto: string): string {
+  let saida = "";
+  for (const ch of texto) {
+    const c = ch.codePointAt(0) ?? 0;
+    if (c === 0x200e || c === 0x200f || (c >= 0x202a && c <= 0x202e) || (c >= 0x2066 && c <= 0x2069)) continue;
+    saida += c < 0x20 || c === 92 || '/:*?"<>|'.includes(ch) ? "_" : ch;
+  }
+  return saida;
+}
+
 function nomeSeguro(bruto: unknown, ext: string[]): string {
-  let nome = String(bruto || "arquivo")
-    .replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, "")
-    .replace(/[\\/:*?"<>|\u0000-\u001f]/g, "_")
+  let nome = limparNome(String(bruto || "arquivo"))
     .trim().slice(0, 120) || "arquivo";
   const atual = nome.includes(".") ? nome.split(".").pop()!.toLowerCase() : "";
   if (!ext.includes(atual)) nome = `${nome}.${ext[0]}`;

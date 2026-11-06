@@ -562,3 +562,6 @@ html.travado body { padding-right: var(--barra, 0px); }
 .extensao-novo { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
 .extensao-novo input { flex: 1 1 200px; min-width: 0; padding: 8px 10px; border: 1px solid var(--border-campo); border-radius: var(--radius-md); background: var(--bg-subtle); color: var(--text-primary); font: inherit; }
 .codigo-extensao { display: block; margin-top: 6px; padding: 6px 8px; border-radius: var(--radius-sm); background: var(--bg-subtle); word-break: break-all; font-size: 13px; user-select: all; }
+
+/* Quem cobrar hoje: filtro da faixa de atraso (06/11/2026). */
+.faixa-atraso { padding: 6px 10px; border: 1px solid var(--border-campo); border-radius: var(--radius-md); background: var(--bg-subtle); color: var(--text-primary); font: inherit; font-size: 13px; }

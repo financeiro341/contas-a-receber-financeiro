@@ -5,9 +5,11 @@
 //   B (--aberto):     PesquisarLancamentos {cNatureza R, cStatus ATRASADO, cCodCateg 1.02.02, previsão de 01/01 a hoje}
 //   C (--pagamento):  PesquisarLancamentos {cNatureza R, cCodCateg 1.02.02, pagamento do dia 01 do mês a hoje}
 // Da consulta B saem também os atrasados por cliente do Omie, para o "Quem cobrar hoje".
+//   D (só para o Quem cobrar, 06/11/2026): os mesmos atrasados de honorários dos anos anteriores (previsão de 01/01/2015
+//     a 31/12 do ano passado), para a lista mostrar também as maiores dívidas antigas. Não entra em nenhum total.
 
 export const CATEG = "1.02.02"; // Honorários
-export const VERSAO = "painel-cr omie_totais 2026-11-05 (conta do financeiro.py v8)";
+export const VERSAO = "painel-cr omie_totais 2026-11-06 (conta do financeiro.py v8; atrasados de todos os anos)";
 
 type Pagina = { nTotRegistros?: number; nTotPaginas?: number; titulosEncontrados?: any[] } | null;
 export type Consultar = (param: Record<string, unknown>) => Promise<Pagina>;
@@ -36,6 +38,7 @@ export function filtros(hoje: string) {
     vencimento: { cNatureza: "R", cCodCateg: CATEG, dDtVencDe: br(p.ini), dDtVencAte: br(p.fim_m), lDadosCad: true },
     aberto: { cNatureza: "R", cStatus: "ATRASADO", cCodCateg: CATEG, dDtPrevDe: br(p.ini), dDtPrevAte: br(hoje) },
     pagamento: { cNatureza: "R", cCodCateg: CATEG, dDtPagtoDe: br(p.ini_m), dDtPagtoAte: br(hoje) },
+    antigos: { cNatureza: "R", cStatus: "ATRASADO", cCodCateg: CATEG, dDtPrevDe: "01/01/2015", dDtPrevAte: `31/12/${Number(hoje.slice(0, 4)) - 1}` },
   };
 }
 
@@ -63,7 +66,8 @@ export async function todasAsPaginas(consultar: Consultar, filtro: Record<string
   return { titulos, esperado };
 }
 
-export function calcular(hoje: string, venc: Map<number, any>, espV: number, abt: Map<number, any>, espA: number, pag: Map<number, any>, espC: number) {
+export function calcular(hoje: string, venc: Map<number, any>, espV: number, abt: Map<number, any>, espA: number, pag: Map<number, any>, espC: number,
+  ant: Map<number, any> = new Map(), espD = 0) {
   const p = periodos(hoje);
   const dentro = (d: string | null) => d !== null && p.ini <= d && d <= hoje;
   const noMes = (d: string | null) => d !== null && p.ini_m <= d && d <= p.fim_m;
@@ -125,7 +129,7 @@ export function calcular(hoje: string, venc: Map<number, any>, espV: number, abt
   const recNoMes = [...lancs.values()].reduce((s, v) => s + v, 0);
   const nRecNoMes = [...lancs.values()].filter((v) => v > 0).length;
 
-  const completo = venc.size >= espV && abt.size >= espA && pag.size >= espC;
+  const completo = venc.size >= espV && abt.size >= espA && pag.size >= espC && ant.size >= espD;
   const totais = {
     data: hoje, inicio: p.ini, totais_ate: hoje,
     recebido_total: r2(rec), inadimplencia_total: r2(inad),
@@ -140,10 +144,30 @@ export function calcular(hoje: string, venc: Map<number, any>, espV: number, abt
     lidos_vencimento: venc.size, esperados_vencimento: espV,
     lidos_aberto: abt.size, esperados_aberto: espA,
     lidos_pagamento: pag.size, esperados_pagamento: espC,
+    lidos_anos_anteriores: ant.size, esperados_anos_anteriores: espD,
     status: completo ? "completo" : "incompleto",
     versao_programa: VERSAO,
   };
-  const atrasados = [...porCliente.entries()].map(([cliente, x]) => ({ cliente, qtd: x.qtd, valor: r2(x.valor), mais_antigo: x.mais_antigo }));
+  // Quem cobrar hoje: dívida do ano (consulta B) e de todos os anos (B + D, os anos anteriores).
+  const doAno = new Map([...porCliente.entries()].map(([k, x]) => [k, { ...x }]));
+  const fimAnoPassado = `${Number(hoje.slice(0, 4)) - 1}-12-31`;
+  for (const t of ant.values()) {
+    const c = t.cabecTitulo, r = t.resumo || {};
+    const dp = dataDe(c.dDtPrevisao);
+    if (c.cStatus === "CANCELADO" || c.cCodCateg !== CATEG || !dp || dp > fimAnoPassado) continue;
+    const ab = r.nValAberto || 0;
+    const cli = Number(c.nCodCliente);
+    if (ab <= 0 || !Number.isSafeInteger(cli) || cli <= 0) continue;
+    const x = porCliente.get(cli) || { qtd: 0, valor: 0, mais_antigo: null };
+    x.qtd++; x.valor += ab;
+    const dv = dataDe(c.dDtVenc) || dp;
+    if (dv && (!x.mais_antigo || dv < x.mais_antigo)) x.mais_antigo = dv;
+    porCliente.set(cli, x);
+  }
+  const atrasados = [...porCliente.entries()].map(([cliente, x]) => {
+    const a = doAno.get(cliente);
+    return { cliente, qtd: x.qtd, valor: r2(x.valor), mais_antigo: x.mais_antigo, qtd_ano: a?.qtd ?? 0, valor_ano: r2(a?.valor ?? 0) };
+  });
   return { totais, atrasados, status: totais.status as "completo" | "incompleto" };
 }
 
@@ -153,5 +177,6 @@ export async function retratoDoOmie(consultar: Consultar, hoje: string) {
   const a = await todasAsPaginas(consultar, f.vencimento);
   const b = await todasAsPaginas(consultar, f.aberto);
   const c = await todasAsPaginas(consultar, f.pagamento);
-  return calcular(hoje, a.titulos, a.esperado, b.titulos, b.esperado, c.titulos, c.esperado);
+  const d = await todasAsPaginas(consultar, f.antigos);
+  return calcular(hoje, a.titulos, a.esperado, b.titulos, b.esperado, c.titulos, c.esperado, d.titulos, d.esperado);
 }

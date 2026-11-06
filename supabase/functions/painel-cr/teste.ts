@@ -77,6 +77,7 @@ globalThis.fetch = async (input: any, init: any = {}) => {
       if (db.omieBloqueado) { db.pesquisasBloqueadas = (db.pesquisasBloqueadas || 0) + 1; return resp({ faultstring: "ERROR: Consumo redundante detectado. Aguarde 60 segundos." }, 500); }
       db.pesquisas = [...(db.pesquisas || []), pr];
       const tt = (id: number, venc: string, st: string, valor: number, liq: number, aberto: number, cli = 77) => ({ cabecTitulo: { nCodTitulo: id, cCodCateg: "1.02.02", dDtVenc: venc, dDtPrevisao: venc, cStatus: st, nValorTitulo: valor, nCodCliente: cli, cNatureza: "R" }, resumo: { nValLiquido: liq, nValAberto: aberto }, lancamentos: liq ? [{ nCodLanc: id * 10, dDtLanc: "03/11/2026", nValLanc: liq }] : [] });
+      if (pr.cStatus === "ATRASADO" && String(pr.dDtPrevAte).startsWith("31/12/")) return resp({ nTotRegistros: 2, nTotPaginas: 1, titulosEncontrados: [tt(6, "10/05/2024", "ATRASADO", 200, 0, 200), tt(7, "10/03/2025", "ATRASADO", 1000, 0, 1000, 99)] });
       if (pr.cStatus === "ATRASADO") return resp({ nTotRegistros: 2, nTotPaginas: 1, titulosEncontrados: [tt(2, "10/10/2026", "ATRASADO", 500, 0, 500), tt(3, "10/09/2026", "ATRASADO", 300, 0, 300, 88)] });
       if (pr.dDtPagtoDe) return resp({ nTotRegistros: 1, nTotPaginas: 1, titulosEncontrados: [tt(1, "02/11/2026", "RECEBIDO", 1000, 1000, 0)] });
       const pag1 = [tt(1, "02/11/2026", "RECEBIDO", 1000, 1000, 0), tt(2, "10/10/2026", "ATRASADO", 500, 0, 500)];
@@ -273,9 +274,12 @@ const midia = async (id: string) => { const r = await fetch(`http://fn/?acao=mid
   let [s, x] = await g("acao=omie_agora");
   const f = x.financeiro || {};
   ok(s === 200 && x.status === "completo" && f.titulos_faturado_mes === 2 && f.faturado_mes === 1700 && f.recebido_mes === 1000 && f.inadimplencia_total === 800 && f.a_vencer_mes === 700 && f.recebido_no_mes === 1000, "totais do Omie calculados na hora " + JSON.stringify({ s, f }));
-  ok(db.pesquisas.length === 4 && db.pesquisas.every((p: any) => p.nRegPorPagina === 50 && p.cCodCateg === "1.02.02" && p.cNatureza === "R"), "3 consultas de Honorários, 50 por página, todas as páginas");
+  ok(db.pesquisas.length === 5 && db.pesquisas.every((p: any) => p.nRegPorPagina === 50 && p.cCodCateg === "1.02.02" && p.cNatureza === "R"), "4 consultas de Honorários (3 dos totais e a dos anos anteriores), 50 por página, todas as páginas");
+  ok(f.inadimplencia_total === 800, "a dívida dos anos anteriores não entra nos totais");
   ok(db.retratos.length === 2 && db.retratos[0].status === "calculando", "trava gravada antes de consultar o Omie");
-  ok(db.retratos[1].atrasados.length === 2 && db.retratos[1].atrasados.find((a: any) => a.cliente === 77).valor === 500, "retrato guardado com os atrasados por cliente");
+  const a77 = db.retratos[1].atrasados.find((a: any) => a.cliente === 77), a99 = db.retratos[1].atrasados.find((a: any) => a.cliente === 99);
+  ok(db.retratos[1].atrasados.length === 3 && a77.valor === 700 && a77.valor_ano === 500 && a77.qtd === 2 && a77.qtd_ano === 1 && a77.mais_antigo === "2024-05-10", "retrato com a dívida de todos os anos e a do ano por cliente " + JSON.stringify(a77));
+  ok(a99.valor === 1000 && a99.valor_ano === 0 && a99.qtd_ano === 0, "cliente só com dívida antiga entra com valor do ano zero");
   const antes = db.pesquisas.length;
   [s, x] = await g("acao=omie_agora&atualizar=1");
   ok(s === 200 && db.pesquisas.length === antes, "atualizar antes de 2 minutos reaproveita o cálculo");
@@ -283,9 +287,9 @@ const midia = async (id: string) => { const r = await fetch(`http://fn/?acao=mid
   [s, x] = await g("acao=omie_agora");
   ok(s === 200 && db.pesquisas.length === antes, "sem atualizar, o cálculo de 5 minutos vale");
   [s, x] = await g("acao=omie_agora&atualizar=1");
-  ok(s === 200 && db.pesquisas.length === antes + 4 && db.retratos.length === 4 && db.retratos[3].status === "completo", "atualizar depois de 2 minutos calcula de novo");
+  ok(s === 200 && db.pesquisas.length === antes + 5 && db.retratos.length === 4 && db.retratos[3].status === "completo", "atualizar depois de 2 minutos calcula de novo");
   [s, x] = await g("acao=quem_cobrar");
-  ok(s === 200 && db.quemCobrar.p_atrasados.length === 2 && x.contatos.length === 1 && x.calculado_em, "quem cobrar usa os atrasados do retrato");
+  ok(s === 200 && db.quemCobrar.p_atrasados.length === 3 && x.contatos.length === 1 && x.calculado_em, "quem cobrar usa os atrasados do retrato");
   [s, x] = await g("acao=omie");
   ok(s === 200 && x.financeiro.faturado_mes === 1700, "aba Omie mostra o cálculo mais novo");
   [s, x] = await g("acao=buscar_conversa&contato=94&q=a");
