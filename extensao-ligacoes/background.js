@@ -32,12 +32,13 @@ async function enviar(msg) {
     return guardarSituacao({ ok: false, texto: 'Sem conexão com o sistema. Tenta de novo na próxima leitura.' });
   }
   const j = await r.json().catch(() => ({}));
+  if (r.status === 429) return guardarSituacao({ ok: true, texto: 'Leitura feita há pouco; a próxima vai normalmente.' });
   if (r.status === 401) return guardarSituacao({ ok: false, texto: 'O código de ligação não vale mais. Gere outro no sistema e cole nas opções.' });
   if (!r.ok) return guardarSituacao({ ok: false, texto: 'O sistema recusou o envio (' + r.status + ').' });
   const dia = new Date().toISOString().slice(0, 10);
   for (const x of corpo.ligacoes) limpas[x.chave] = { dia, marca: marca(x) };
   await chrome.storage.local.set({ enviadas: limpas });
-  return guardarSituacao({ ok: true, texto: `Lidas hoje: ${msg.resumo?.lidas ?? 0}. Enviadas agora: ${j.gravadas ?? 0}.`, fontes: msg.resumo?.fontes });
+  return guardarSituacao({ ok: true, texto: `Ligações de hoje lidas: ${msg.resumo?.lidas ?? 0}. Novas gravadas agora: ${j.novas ?? 0}.`, fontes: msg.resumo?.fontes });
 }
 
 chrome.runtime.onMessage.addListener((msg, _de, responder) => {

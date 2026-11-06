@@ -7,3 +7,8 @@ verify_jwt = false
 # Webhook da Evolution: autenticação própria por ?token= (sha256 em public.configuracao).
 [functions.receber-evolution]
 verify_jwt = false
+
+# Extensão de ligações do Chrome (06/11/2026): autenticação própria pelo código de ligação (sha256 em
+# extensao_aparelhos). Não é JWT: nunca colocar a chave anon na extensão para "consertar".
+[functions.registrar-ligacoes]
+verify_jwt = false

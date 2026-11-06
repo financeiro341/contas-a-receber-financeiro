@@ -802,6 +802,8 @@ async function tratarPost(u: Usuario, corpo: any) {
       const codigo = btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
       const resumo = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(codigo))))
         .map((b) => b.toString(16).padStart(2, "0")).join("");
+      // Um código ativo por computador: gerar de novo com o mesmo nome desliga o anterior.
+      await rest(`extensao_aparelhos?nome=eq.${encodeURIComponent(nome)}&revogado_em=is.null`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ revogado_em: new Date().toISOString(), revogado_por: u.id }) });
       const [a] = await rest("extensao_aparelhos", {
         method: "POST",
         body: JSON.stringify({ nome, token_sha256: resumo, criado_por: u.id, criado_por_nome: u.nome }),
@@ -983,9 +985,16 @@ Deno.serve(async (req) => {
         return json(await equipe(usuario), 200, h);
       case "respostas":
         return json(await rest("respostas_prontas?select=id,titulo,texto,criada_por,criada_por_nome&apagada_em=is.null&order=titulo"), 200, h);
-      case "extensoes":
-        // Situação da extensão de ligações em cada computador (sem o resumo do código).
-        return json(await rest("extensao_aparelhos?select=id,nome,criado_por_nome,criado_em,revogado_em,ultimo_contato,ultima_versao,ultimo_resumo&order=id"), 200, h);
+      case "extensoes": {
+        // Situação da extensão de ligações em cada computador: só administrador, e só o que o quadro mostra.
+        if (usuario.papel !== "admin") return json({ erro: "Só um administrador vê a extensão de ligações." }, 403, h);
+        const lista = await rest("extensao_aparelhos?select=id,nome,criado_por_nome,criado_em,revogado_em,ultimo_contato,ultima_versao,ultimo_resumo&order=id");
+        return json(lista.map((a: any) => ({
+          id: a.id, nome: a.nome, criado_por_nome: a.criado_por_nome, criado_em: a.criado_em, revogado_em: a.revogado_em,
+          ultimo_contato: a.ultimo_contato, ultima_versao: a.ultima_versao,
+          lidas: Number.isInteger(a.ultimo_resumo?.lidas) ? a.ultimo_resumo.lidas : null,
+        })), 200, h);
+      }
       default:
         return json({ erro: "Ação desconhecida." }, 400, h);
     }

@@ -46,7 +46,7 @@ export default function ExtensaoLigacoes() {
               <li key={a.id}>
                 <span className={`etq ${parado ? 'cor-vermelho' : 'cor-verde'}`}>{parado ? 'sem notícia há mais de 1 hora' : 'funcionando'}</span>
                 <b>{a.nome}</b>
-                <span className="mini">{a.ultimo_contato ? `último envio ${quando(a.ultimo_contato)}` : 'ainda não enviou'}{a.ultima_versao ? ` · versão ${a.ultima_versao}` : ''}{a.ultimo_resumo?.leitura?.lidas != null ? ` · ${a.ultimo_resumo.leitura.lidas} ligações lidas hoje` : ''}</span>
+                <span className="mini">{a.ultimo_contato ? `último envio ${quando(a.ultimo_contato)}` : 'ainda não enviou'}{a.ultima_versao ? ` · versão ${a.ultima_versao}` : ''}{a.lidas != null ? ` · ${a.lidas} ligações lidas hoje` : ''}</span>
                 <button type="button" className="link-botao" onClick={() => desligar(a)}>Desligar</button>
               </li>
             );
@@ -57,7 +57,7 @@ export default function ExtensaoLigacoes() {
       {codigo ? (
         <div className="aviso" role="status">
           <div style={{ flex: 1 }}>
-            <b>Código de "{codigo.nome}"</b> (aparece só agora; cole nas opções da extensão e feche este aviso):
+            <b>Código de "{codigo.nome}"</b> (aparece só agora; cole nas opções da extensão neste mesmo computador e feche este aviso; não mande por WhatsApp nem e-mail; gerar outro com o mesmo nome desliga este):
             <code className="codigo-extensao">{codigo.codigo}</code>
           </div>
           <button type="button" className="botao" onClick={copiar}><i className="ti ti-copy" aria-hidden="true" />Copiar</button>

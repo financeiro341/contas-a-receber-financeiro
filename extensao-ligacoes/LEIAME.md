@@ -15,8 +15,10 @@ Lê as ligações de hoje no WhatsApp Web do financeiro e grava no sistema do co
    o Chrome usa ela.
 2. No Chrome, abra `chrome://extensions`, ligue **Modo do desenvolvedor** (canto de cima, à direita) e clique em
    **Carregar sem compactação**. Escolha a pasta `extensao-ligacoes`.
-3. No sistema do contas a receber, aba **Atendimento**, quadro **Ligações automáticas** (só administrador vê),
-   escreva o nome do computador e clique em **Gerar código de ligação**. O código aparece uma vez só.
+3. **No próprio computador 174**, entre no sistema do contas a receber com um usuário administrador, aba
+   **Atendimento**, quadro **Ligações automáticas**, escreva o nome do computador e clique em **Gerar código de
+   ligação**. O código aparece uma vez só. **Nunca mande o código por WhatsApp, e-mail ou mensagem**: ele fica
+   guardado na conversa. Gerar outro código com o mesmo nome desliga o anterior.
 4. No Chrome, clique no ícone da extensão (quebra-cabeça, depois "Ligações do Financeiro"), cole o código e clique
    em **Salvar**. Feche o aviso do código no sistema.
 5. Recarregue a aba do WhatsApp Web. Em até 1 minuto a extensão faz a primeira leitura; o quadro do sistema passa a
@@ -32,6 +34,10 @@ guardar as ligações (aí é preciso ajustar o `leitor.js`). Enquanto isso, a l
 do telefone da conversa, no sistema.
 
 ## Segurança
+- A instalação sem compactação exige o Modo do desenvolvedor, então quem usa este Chrome consegue ver o código.
+  Por isso ele só serve para gravar ligações de hoje deste computador: não lê nada, não muda ligação já gravada (só
+  completa o resultado e a duração) e tem limite por dia. No futuro, dá para instalar por política do Chrome e
+  desligar o Modo do desenvolvedor.
 - O código de ligação fica só neste Chrome e só serve para **gravar** ligações: com ele ninguém lê nada do sistema
   nem manda mensagem. Um administrador desliga o código no quadro do sistema a qualquer momento.
 - No banco fica só o resumo (sha256) do código.

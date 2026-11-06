@@ -10,16 +10,24 @@
     return new Promise((ok, falha) => {
       const r = indexedDB.open(nome); // sem versão: nunca dispara criação nem mudança do banco do WhatsApp
       r.onupgradeneeded = () => { r.transaction.abort(); falha(new Error('banco ' + nome + ' não existe')); };
-      r.onsuccess = () => ok(r.result);
+      r.onsuccess = () => {
+        const db = r.result;
+        // Se o próprio WhatsApp Web precisar atualizar o banco (ou sair da conta), solta na hora.
+        db.onversionchange = () => db.close();
+        ok(db);
+      };
       r.onerror = () => falha(r.error);
     });
   }
 
-  function todos(db, loja, filtro, limite) {
+  // Percorre a loja; com um índice de horário ("t"), lê só a partir do começo do dia.
+  function todos(db, loja, filtro, limite, desdeT) {
     return new Promise((ok, falha) => {
       const saida = [];
       const tx = db.transaction(loja, 'readonly');
-      const req = tx.objectStore(loja).openCursor(null, 'prev');
+      const os = tx.objectStore(loja);
+      const indice = desdeT != null ? Array.from(os.indexNames).find((n) => { try { return os.index(n).keyPath === 't'; } catch { return false; } }) : null;
+      const req = indice ? os.index(indice).openCursor(IDBKeyRange.lowerBound(desdeT), 'prev') : os.openCursor(null, 'prev');
       req.onsuccess = () => {
         const c = req.result;
         if (!c || saida.length >= limite) return ok(saida);
@@ -104,8 +112,14 @@
         // Formato A: mensagens "call_log" (as mais novas primeiro; para quando passa do começo do dia).
         if (lojas.includes('message')) {
           const limiteT = Math.floor(inicioMs / 1000);
-          const msgs = await todos(db, 'message', (m) => ehMensagemDeLigacao(m) && numero(m.t) >= limiteT, 2000);
-          msgs.map(deMensagem).filter(valida).filter(ehDoDia(inicioMs)).forEach((x) => { if (!achadas.has(x.chave)) achadas.set(x.chave, x); });
+          const msgs = await todos(db, 'message', (m) => ehMensagemDeLigacao(m) && numero(m.t) >= limiteT, 2000, limiteT);
+          // A mesma ligação pode estar nos dois formatos com chaves diferentes: vale o registro da aba Ligações
+          // (mesmo número e direção até 2 minutos de diferença).
+          const doRegistro = Array.from(achadas.values());
+          const repetida = (x) => doRegistro.some((y) => y.chat === x.chat && y.direcao === x.direcao
+            && Math.abs(Date.parse(y.iniciada_em) - Date.parse(x.iniciada_em)) <= 120000);
+          msgs.map(deMensagem).filter(valida).filter(ehDoDia(inicioMs)).filter((x) => !repetida(x))
+            .forEach((x) => { if (!achadas.has(x.chave)) achadas.set(x.chave, x); });
           fontes.push('message:' + msgs.length);
         }
       } finally {
@@ -122,15 +136,21 @@
       let db;
       try { db = await abrir(nome); } catch (e) { saida[nome] = String(e.message); continue; }
       saida[nome] = {};
-      for (const loja of Array.from(db.objectStoreNames)) {
-        const ex = await todos(db, loja, () => true, 1);
-        saida[nome][loja] = ex[0] && typeof ex[0] === 'object' ? Object.keys(ex[0]).slice(0, 40) : typeof ex[0];
+      try {
+        for (const loja of Array.from(db.objectStoreNames)) {
+          const ex = await todos(db, loja, () => true, 1);
+          const indices = Array.from(db.transaction(loja, 'readonly').objectStore(loja).indexNames);
+          saida[nome][loja] = { campos: ex[0] && typeof ex[0] === 'object' ? Object.keys(ex[0]).slice(0, 40) : typeof ex[0], indices };
+        }
+        if (Array.from(db.objectStoreNames).includes('message')) {
+          const lig = await todos(db, 'message', ehMensagemDeLigacao, 3);
+          saida[nome]['message(call_log)'] = lig.map((m) => Object.keys(m).slice(0, 60));
+        }
+      } catch (e) {
+        saida[nome].erro = String(e && e.message || e);
+      } finally {
+        db.close();
       }
-      if (Array.from(db.objectStoreNames).includes('message')) {
-        const lig = await todos(db, 'message', ehMensagemDeLigacao, 3);
-        saida[nome]['message(call_log)'] = lig.map((m) => Object.keys(m).slice(0, 60));
-      }
-      db.close();
     }
     return saida;
   }
