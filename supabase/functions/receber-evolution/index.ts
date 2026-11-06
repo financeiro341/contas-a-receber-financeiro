@@ -192,7 +192,9 @@ Deno.serve(async (req: Request) => {
     .insert({ evento, instancia, payload: limpar(corpo) }).select("id").single();
   let erro: string | null = null;
   try {
-    if (evento === "messages.upsert") await tratarMensagem(corpo.data);
+    // send.message: o que sai pela própria API da Evolution (boletos do PayBot, envios do n8n) não vem como
+    // messages.upsert. Sem este evento o sistema perdia ~20% das mensagens nossas (achado de 06/11/2026).
+    if (evento === "messages.upsert" || evento === "send.message") await tratarMensagem(corpo.data);
     else if (evento === "messages.update") await tratarAtualizacao(corpo.data);
     else if (evento === "call") await tratarChamada(corpo.data);
   } catch (e) {
