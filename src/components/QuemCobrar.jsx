@@ -16,7 +16,7 @@ const FILTROS = [
 const GRUPOS = [
   { id: 'todos', nome: 'Os dois grupos' },
   { id: 'maior', nome: 'Maiores dívidas', dica: 'Os 40 que mais devem, somando todos os anos' },
-  { id: 'ano', nome: 'Dívidas do ano', dica: 'Honorário vencido de 01/01 até hoje' },
+  { id: 'ano', nome: 'Dívidas do ano', dica: 'Honorário vencido de 01/01 até hoje, do menor valor para o maior' },
 ];
 const FAIXAS = [
   { id: 'todas', nome: 'Qualquer atraso', de: -Infinity, ate: Infinity },
@@ -53,8 +53,10 @@ export default function QuemCobrar({ abrirNaCaixa }) {
   // Grupo e faixa de atraso valem para os três botões (falta cobrar, já falamos, todos) e para a soma.
   const base = useMemo(() => {
     const fx = FAIXAS.find((f) => f.id === faixa) || FAIXAS[0];
-    return (d?.contatos || []).filter((c) => (grupo === 'todos' || (grupo === 'maior' ? c.maior : c.do_ano))
+    const filtrados = (d?.contatos || []).filter((c) => (grupo === 'todos' || (grupo === 'maior' ? c.maior : c.do_ano))
       && c.dias_atraso >= fx.de && c.dias_atraso <= fx.ate);
+    // Dívidas do ano: do menor valor do ano para o maior (pedido do Marcus, 06/11/2026). Os outros grupos seguem do maior para o menor.
+    return grupo === 'ano' ? [...filtrados].sort((x, y) => Number(x.valor_ano || 0) - Number(y.valor_ano || 0)) : filtrados;
   }, [d, grupo, faixa]);
   const contagem = useMemo(() => {
     const c = base;
