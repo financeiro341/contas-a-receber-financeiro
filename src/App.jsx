@@ -150,7 +150,7 @@ export default function App() {
       </header>
       <main className={aba === 'conversas' ? 'main-caixa' : undefined}>
         <h1 className="so-leitor">{abaAtual?.nome}</h1>
-        {usaDia && aba !== 'hoje' && aba !== 'atendimento' && <p className="data-pagina">{aba === 'historico' ? `Até ${dataLonga(dia)}` : dataLonga(dia)}</p>}
+        {usaDia && !['hoje', 'atendimento', 'historico'].includes(aba) && <p className="data-pagina">{aba === 'historico' ? `Até ${dataLonga(dia)}` : dataLonga(dia)}</p>}
         {aba === 'hoje' && <Hoje dia={dia} ehHoje={ehHoje} nome={eu?.nome} abrirConversa={abrirConversa} abrirNaCaixa={abrirNaCaixa} />}
         {aba === 'conversas' && <Caixa eu={eu} contatoPedido={pedidoCaixa} />}
         {aba === 'atendimento' && <Atendimento dia={dia} ehHoje={ehHoje} abrirConversa={abrirConversa} />}
