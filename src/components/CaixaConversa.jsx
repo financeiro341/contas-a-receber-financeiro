@@ -29,6 +29,57 @@ function Leitura({ status }) {
   return <i className="ti ti-check" aria-label="enviada" title="Enviada" />;
 }
 
+// Botão "+" do compositor, como o clipe do WhatsApp: documento, segunda via do boleto e respostas prontas.
+function MenuAnexar({ desligado, omie, aoDocumento, aoSegundaVia, aoRespostas }) {
+  const [aberto, setAberto] = useState(false);
+  const caixa = useRef(null);
+  const botao = useRef(null);
+  useEffect(() => {
+    if (!aberto) return undefined;
+    caixa.current?.querySelector('button')?.focus();
+    const fora = (e) => { if (!caixa.current?.contains(e.target) && !botao.current?.contains(e.target)) setAberto(false); };
+    const tecla = (e) => {
+      if (e.key === 'Escape') { e.stopPropagation(); setAberto(false); botao.current?.focus(); return; }
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        const itens = [...(caixa.current?.querySelectorAll('button') || [])];
+        const i = itens.indexOf(document.activeElement);
+        itens[(i + (e.key === 'ArrowDown' ? 1 : itens.length - 1)) % itens.length]?.focus();
+      }
+    };
+    document.addEventListener('mousedown', fora);
+    document.addEventListener('keydown', tecla, true);
+    return () => { document.removeEventListener('mousedown', fora); document.removeEventListener('keydown', tecla, true); };
+  }, [aberto]);
+  const escolher = (fn) => { setAberto(false); fn(); };
+  return (
+    <>
+      <button type="button" ref={botao} className="botao icone botao-mais" onClick={() => setAberto(!aberto)} aria-haspopup="menu" aria-expanded={aberto}
+        aria-label="Anexar arquivo, segunda via ou resposta pronta" title="Anexar" disabled={desligado}>
+        <i className="ti ti-plus" aria-hidden="true" />
+      </button>
+      {aberto && (
+        <div className="menu-anexar" ref={caixa} role="menu" aria-label="Anexar">
+          <button type="button" role="menuitem" onClick={() => escolher(aoDocumento)}>
+            <span className="circ c-doc"><i className="ti ti-file-text" aria-hidden="true" /></span>
+            <span>Documento<small>PDF, imagem, planilha ou texto, até 8 MB</small></span>
+          </button>
+          {omie && (
+            <button type="button" role="menuitem" onClick={() => escolher(aoSegundaVia)}>
+              <span className="circ c-boleto"><i className="ti ti-file-invoice" aria-hidden="true" /></span>
+              <span>Segunda via do boleto<small>Busca o título no Omie</small></span>
+            </button>
+          )}
+          <button type="button" role="menuitem" onClick={() => escolher(aoRespostas)}>
+            <span className="circ c-resp"><i className="ti ti-bolt" aria-hidden="true" /></span>
+            <span>Resposta pronta<small>Ou digite / no começo da mensagem</small></span>
+          </button>
+        </div>
+      )}
+    </>
+  );
+}
+
 // Rascunho só nesta aba (sessionStorage) e por pessoa; some ao sair ou fechar a aba.
 const chaveRascunho = (eu, contato) => `cr:rascunho:${eu?.id || 'x'}:${contato}`;
 function lerRascunho(chave) { try { return sessionStorage.getItem(chave) || ''; } catch { return ''; } }
@@ -73,7 +124,7 @@ export default function CaixaConversa({ contato, eu, etiquetas, equipe, aoVoltar
     // Ouve na fase de captura, antes das janelinhas: assim ainda dá para ver se alguma está aberta.
     const tecla = (e) => {
       if (e.key !== 'Escape' || e.isComposing) return;
-      if (document.querySelector('.popover, .respostas, .lateral, [role="alertdialog"]')) return;
+      if (document.querySelector('.popover, .respostas, .lateral, .menu-anexar, [role="alertdialog"]')) return;
       // Com a busca aberta, o Esc fecha só a busca.
       if (document.querySelector('.busca-conversa')) { e.preventDefault(); setBuscando(false); return; }
       const { detalhes: det, aoVoltar: voltar } = estadoEsc.current;
@@ -278,12 +329,13 @@ export default function CaixaConversa({ contato, eu, etiquetas, equipe, aoVoltar
     try { await retornoFeito(id); avisar('Retorno marcado como feito.'); mudou(); } catch (e) { avisar(e.message, true); } finally { setBaixando(false); }
   }
   let diaAnterior = null;
+  let ladoAnterior = null;
 
   return (
     <section className={`caixa-painel caixa-conversa${detalhes ? ' com-detalhes' : ''}`} aria-label={`Conversa com ${c?.nome || 'o contato'}`}>
       <header className="conversa-topo">
         <button type="button" className="botao icone so-celular" onClick={aoVoltar} aria-label="Voltar para a lista"><i className="ti ti-arrow-left" aria-hidden="true" /></button>
-        <Iniciais nome={c?.nome} />
+        <Iniciais nome={c?.nome} id={contato} />
         <div className="quem-topo">
           <h2>{c?.nome || 'Carregando…'}</h2>
           <div className="sub">
@@ -339,17 +391,21 @@ export default function CaixaConversa({ contato, eu, etiquetas, equipe, aoVoltar
                 {mensagens.map((m) => {
                   const dia = diaDe(m.em);
                   const separador = dia !== diaAnterior ? <div className="sep-dia" role="separator"><span>{rotuloDia(dia)}</span></div> : null;
+                  // A "cauda" do balão (como no WhatsApp) só no primeiro de uma sequência do mesmo lado.
+                  const cauda = separador || ladoAnterior !== m.nos ? ' cauda' : '';
                   diaAnterior = dia;
+                  ladoAnterior = m.nos;
                   return (
                     <Fragment key={m.id}>
                       {separador}
-                      <div className={`balao ${m.nos ? 'nos' : 'cliente'}`} data-msg={m.id}>
+                      <div className={`balao ${m.nos ? 'nos' : 'cliente'}${cauda}`} data-msg={m.id}>
                         {m.arquivo && <span className="arquivo"><i className={`ti ${ICONE_ARQUIVO[m.tipo] || 'ti-paperclip'}`} aria-hidden="true" />{m.arquivo}</span>}
                         <Midia id={m.id} tipo={m.tipo} arquivo={m.arquivo} />
                         {m.texto && <div><TextoWhats texto={m.texto} /></div>}
                         {!m.texto && !m.arquivo && !TIPOS_MIDIA.has(m.tipo) && <em className="sem-texto">{m.tipo === 'audioMessage' ? 'Áudio' : m.tipo === 'imageMessage' ? 'Imagem' : m.tipo === 'videoMessage' ? 'Vídeo' : m.tipo === 'stickerMessage' ? 'Figurinha' : 'Mensagem sem texto'}</em>}
-                        <span className="hora">
-                          {m.nos ? (m.por ? `${m.por}, pelo sistema` : 'Nós') : 'Cliente'} · {horaDe(m.em)}
+                        <span className="hora" title={m.nos ? (m.por ? `Enviada por ${m.por}, pelo sistema` : 'Enviada pelo WhatsApp do financeiro') : 'Mensagem do cliente'}>
+                          <span className="so-leitor">{m.nos ? (m.por ? `${m.por}, pelo sistema, ` : 'Nós, ') : 'Cliente, '}</span>
+                          {horaDe(m.em)}
                           {m.nos && <> <Leitura status={m.status} /></>}
                         </span>
                       </div>
@@ -366,7 +422,7 @@ export default function CaixaConversa({ contato, eu, etiquetas, equipe, aoVoltar
                 {(d.envios || []).filter((e) => e.status !== 'enviado' && !(e.status === 'enviando' && saindo.length)).map((e) => (
                   <div key={`e${e.id}`} className={`balao nos pendente${e.status === 'erro' ? ' falhou' : ''}${e.status === 'incerto' ? ' incerto' : ''}`}>
                     {e.arquivo && <span className="arquivo"><i className="ti ti-paperclip" aria-hidden="true" />{e.arquivo}</span>}
-                    {e.texto && <div>{e.texto}</div>}
+                    {e.texto && <div><TextoWhats texto={e.texto} /></div>}
                     <span className="hora">{e.status === 'erro' ? <><i className="ti ti-alert-circle" aria-hidden="true" /> Não saiu ({e.por}, {horaDe(e.em)})</>
                       : e.status === 'incerto' ? <><i className="ti ti-help-circle" aria-hidden="true" /> Pode ter saído: confira acima antes de reenviar ({e.por}, {horaDe(e.em)})</>
                         : `Enviando… (${e.por})`}</span>
@@ -403,11 +459,13 @@ export default function CaixaConversa({ contato, eu, etiquetas, equipe, aoVoltar
               )}
               <div className="linha-compor">
                 <input ref={anexo} type="file" accept={ACEITOS} onChange={escolherArquivo} hidden />
-                <button type="button" className="botao icone" onClick={() => anexo.current?.click()} aria-label="Anexar arquivo" title="Anexar arquivo (até 8 MB)" disabled={!podeResponder || enviando}><i className="ti ti-paperclip" aria-hidden="true" /></button>
-                {eu?.omie_ligado && (
-                  <button type="button" className="botao icone botao-segunda-via" onClick={() => { setPainelRespostas(null); setSegundaVia(!segundaVia); }} aria-label="Segunda via do boleto" aria-expanded={segundaVia} title="Segunda via do boleto (Omie)" disabled={!podeResponder || enviando}><i className="ti ti-file-invoice" aria-hidden="true" /></button>
-                )}
-                <button type="button" className="botao icone botao-respostas" onClick={() => { setSegundaVia(false); setPainelRespostas(painelRespostas === null ? '' : null); }} aria-label="Respostas prontas" aria-expanded={painelRespostas !== null} title="Respostas prontas (ou digite / no começo)" disabled={!podeResponder || enviando}><i className="ti ti-bolt" aria-hidden="true" /></button>
+                <MenuAnexar
+                  desligado={!podeResponder || enviando}
+                  omie={!!eu?.omie_ligado}
+                  aoDocumento={() => anexo.current?.click()}
+                  aoSegundaVia={() => { setPainelRespostas(null); setSegundaVia(true); }}
+                  aoRespostas={() => { setSegundaVia(false); setPainelRespostas(''); }}
+                />
                 <label className="so-leitor" htmlFor={`msg-${contato}`}>Mensagem</label>
                 <textarea
                   id={`msg-${contato}`}
@@ -417,21 +475,21 @@ export default function CaixaConversa({ contato, eu, etiquetas, equipe, aoVoltar
                   onChange={(e) => mudarTexto(e.target.value)}
                   onKeyDown={teclas}
                   maxLength={arquivo ? 1000 : 4000}
-                  placeholder={arquivo ? 'Legenda (opcional)' : 'Escreva a mensagem'}
+                  placeholder={arquivo ? 'Legenda (opcional)' : 'Mensagem'}
                   disabled={!podeResponder}
                 />
-                <button type="button" className="botao principal" onClick={enviar} aria-label={enviando ? 'Enviando' : 'Enviar'} disabled={!podeResponder || enviando || (!texto.trim() && !arquivo)}>
-                  <i className={`ti ${enviando ? 'ti-loader-2 girando' : 'ti-send'}`} aria-hidden="true" /><span className="rotulo-enviar">{enviando ? 'Enviando' : 'Enviar'}</span>
+                <button type="button" className="botao principal botao-enviar" onClick={enviar} aria-label={enviando ? 'Enviando' : 'Enviar'} title="Enviar (Enter)" disabled={!podeResponder || enviando || (!texto.trim() && !arquivo)}>
+                  <i className={`ti ${enviando ? 'ti-loader-2 girando' : 'ti-send'}`} aria-hidden="true" />
                 </button>
               </div>
-              <p className="assinatura">Sai com a assinatura <b>{eu.assinatura}</b>. Enter envia, Shift+Enter quebra a linha, / abre as respostas prontas.</p>
+              <p className="assinatura">Sai com a assinatura <b>{eu.assinatura}</b>. Enter envia, Shift+Enter quebra a linha, / no começo abre as respostas prontas.</p>
             </>
           )}
         </div>
       </div>
 
       {detalhes && d && (
-        <CaixaDetalhes contato={contato} dados={d} eu={eu} etiquetas={etiquetas} equipe={equipe}
+        <CaixaDetalhes contato={contato} info={c} dados={d} eu={eu} etiquetas={etiquetas} equipe={equipe}
           aoFechar={() => setDetalhes(false)}
           aoMudar={mudou} recarregarEtiquetas={recarregarEtiquetas} />
       )}

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { lerCaixa, lerEquipe, lerEtiquetas, lerRespostas } from '../lib/api.js';
-import { Vazio, useDados } from './comum.jsx';
+import { useDados } from './comum.jsx';
+import leao from '../assets/leao.png';
 import CaixaLista from './CaixaLista.jsx';
 import CaixaConversa from './CaixaConversa.jsx';
 
@@ -48,7 +49,11 @@ export default function Caixa({ eu, contatoPedido }) {
         />
       ) : (
         <div className="caixa-painel caixa-vazia">
-          <Vazio icone="ti-messages" titulo="Escolha uma conversa" texto="As conversas dos últimos 30 dias aparecem à esquerda, a mais recente primeiro." />
+          <div className="caixa-boas-vindas">
+            <img src={leao} alt="" />
+            <h2>Conversas do financeiro</h2>
+            <p>Escolha uma conversa à esquerda para responder pelo WhatsApp do financeiro. Ficam ali as conversas dos últimos 30 dias, a mais recente primeiro.</p>
+          </div>
         </div>
       )}
     </div>

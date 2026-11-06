@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Iniciais } from './CaixaLista.jsx';
 import { apagarNota, cancelarRetorno, criarEtiqueta, criarNota, definirDono, desfazerLigacao, marcarEtiqueta } from '../lib/api.js';
 import { rotuloRetorno } from './AcoesConversa.jsx';
 import { NOME_SITUACAO } from '../constants.js';
@@ -13,7 +14,14 @@ const EVENTOS = {
 };
 
 // Coluna da direita: empresas, cobrança, dono, etiquetas, notas internas e histórico da conversa.
-export default function CaixaDetalhes({ contato, dados, eu, etiquetas, equipe, aoFechar, aoMudar, recarregarEtiquetas }) {
+// "5575998123301" → "+55 75 99812-3301" (só para mostrar).
+function telefoneBonito(t) {
+  const d = String(t || '').replace(/\D/g, '');
+  const m = d.match(/^55(\d{2})(\d{4,5})(\d{4})$/);
+  return m ? `+55 ${m[1]} ${m[2]}-${m[3]}` : t;
+}
+
+export default function CaixaDetalhes({ contato, info, dados, eu, etiquetas, equipe, aoFechar, aoMudar, recarregarEtiquetas }) {
   const [nota, setNota] = useState('');
   const [ocupado, setOcupado] = useState('');
   const [erro, setErro] = useState('');
@@ -32,8 +40,13 @@ export default function CaixaDetalhes({ contato, dados, eu, etiquetas, equipe, a
   return (
     <aside className="conversa-detalhes" aria-label="Detalhes da conversa">
       <div className="detalhes-topo">
-        <h3>Detalhes</h3>
-        <button type="button" className="botao icone" onClick={aoFechar} aria-label="Esconder detalhes"><i className="ti ti-x" aria-hidden="true" /></button>
+        <button type="button" className="botao icone" onClick={aoFechar} aria-label="Fechar os dados do contato"><i className="ti ti-x" aria-hidden="true" /></button>
+        <h3>Dados do contato</h3>
+      </div>
+      <div className="bloco-det perfil-det">
+        <Iniciais nome={info?.nome} id={contato} grande />
+        <b>{info?.nome || 'Contato'}</b>
+        {info?.telefone && <span>{telefoneBonito(info.telefone)}</span>}
       </div>
       {erro && <div className="aviso erro" role="alert"><i className="ti ti-alert-triangle" aria-hidden="true" />{erro}</div>}
 

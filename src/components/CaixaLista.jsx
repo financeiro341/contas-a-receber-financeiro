@@ -4,11 +4,11 @@ import { Estado, Vazio } from './comum.jsx';
 import { rotuloRetorno } from './AcoesConversa.jsx';
 
 const FILTROS = [
+  { id: 'todas', nome: 'Todas', dica: 'Todas as conversas do grupo escolhido' },
   { id: 'esperando', nome: 'Esperando', dica: 'A última mensagem é do cliente e a conversa não foi resolvida' },
-  { id: 'sem_ler', nome: 'Sem ler', dica: 'Mensagem do cliente que ninguém abriu' },
+  { id: 'sem_ler', nome: 'Não lidas', dica: 'Mensagem do cliente que ninguém abriu' },
   { id: 'retornos', nome: 'Retornos', dica: 'Retorno marcado para hoje ou atrasado' },
   { id: 'minhas', nome: 'Minhas', dica: 'Conversas em que você é o dono' },
-  { id: 'todas', nome: 'Todas', dica: 'Todas as conversas do grupo escolhido' },
 ];
 const GRUPOS = [
   { id: 'cliente', nome: 'Clientes' },
@@ -21,10 +21,12 @@ function lerFiltros() {
   try { return { filtro: 'todas', grupo: 'cliente', etiqueta: '', ...JSON.parse(localStorage.getItem('cr:caixa') || '{}') }; } catch { return { filtro: 'todas', grupo: 'cliente', etiqueta: '' }; }
 }
 
-export function Iniciais({ nome }) {
-  const p = String(nome || '?').replace(/[^\p{L}\p{N} ]/gu, ' ').trim().split(/\s+/);
-  const ini = ((p[0]?.[0] || '?') + (p.length > 1 ? p[p.length - 1][0] : '')).toUpperCase();
-  return <span className="avatar" aria-hidden="true">{ini}</span>;
+// Círculo com as iniciais, numa de seis cores fixas por contato (como no WhatsApp). Número de telefone mostra o ícone de pessoa.
+export function Iniciais({ nome, id, grande }) {
+  const p = String(nome || '').replace(/[^\p{L}\p{N} ]/gu, ' ').trim().split(/\s+/).filter((x) => /^\p{L}/u.test(x));
+  const ini = p.length ? (p[0][0] + (p.length > 1 ? p[p.length - 1][0] : '')).toUpperCase() : '';
+  const cor = Math.abs(Number(id) || String(nome || '').length) % 6;
+  return <span className={`avatar av-cor-${cor}${grande ? ' grande' : ''}`} aria-hidden="true">{ini || <i className="ti ti-user" />}</span>;
 }
 
 export function ChipEtiqueta({ e }) {
@@ -36,11 +38,11 @@ function BotaoAviso() {
   const suporta = typeof Notification !== 'undefined';
   const [estado, setEstado] = useState(suporta ? Notification.permission : 'denied');
   if (!suporta) return null;
-  if (estado === 'granted') return <span className="mini botao-aviso" title="O navegador avisa quando chega mensagem nova de cliente e o sistema não está na tela"><i className="ti ti-bell-ringing" aria-hidden="true" /> Avisos ligados</span>;
-  if (estado === 'denied') return <span className="mini botao-aviso" title="Os avisos foram bloqueados neste navegador. Libere no cadeado da barra de endereço."><i className="ti ti-bell-off" aria-hidden="true" /> Avisos bloqueados</span>;
+  if (estado === 'granted') return <span className="wa-icone" role="img" aria-label="Avisos de mensagem nova ligados" title="O navegador avisa quando chega mensagem nova de cliente e o sistema não está na tela"><i className="ti ti-bell-ringing" aria-hidden="true" /></span>;
+  if (estado === 'denied') return <span className="wa-icone" role="img" aria-label="Avisos bloqueados neste navegador" title="Os avisos foram bloqueados neste navegador. Libere no cadeado da barra de endereço."><i className="ti ti-bell-off" aria-hidden="true" /></span>;
   return (
-    <button type="button" className="link-botao botao-aviso" style={{ margin: 0 }} onClick={() => Notification.requestPermission().then(setEstado)}>
-      <i className="ti ti-bell" aria-hidden="true" />Avisar mensagem nova
+    <button type="button" className="wa-icone" onClick={() => Notification.requestPermission().then(setEstado)} aria-label="Avisar mensagem nova" title="Avisar quando chegar mensagem nova">
+      <i className="ti ti-bell" aria-hidden="true" />
     </button>
   );
 }
@@ -73,28 +75,29 @@ export default function CaixaLista({ itens, carregando, erro, recarregar, aberto
   return (
     <section className="caixa-painel caixa-lista" aria-label="Conversas">
       <div className="caixa-ferramentas">
-        <div className="busca">
-          <i className="ti ti-search" aria-hidden="true" />
-          <input type="search" placeholder="Buscar nome, empresa ou telefone" aria-label="Buscar conversa" value={busca} onChange={(e) => setBusca(e.target.value)} />
-        </div>
-        <div className="linha-filtros">
+        <div className="lista-cabeca">
+          <h2>Conversas</h2>
           <label className="so-leitor" htmlFor="grupo">Contatos</label>
-          <select id="grupo" value={f.grupo} onChange={(e) => setF({ ...f, grupo: e.target.value })}>
+          <select id="grupo" className="wa-seletor" value={f.grupo} onChange={(e) => setF({ ...f, grupo: e.target.value })}>
             {GRUPOS.map((g) => <option key={g.id} value={g.id}>{g.nome}</option>)}
           </select>
-          <label className="so-leitor" htmlFor="etq">Etiqueta</label>
-          <select id="etq" value={f.etiqueta} onChange={(e) => setF({ ...f, etiqueta: e.target.value })}>
-            <option value="">Todas as etiquetas</option>
-            {etiquetas.map((e) => <option key={e.id} value={String(e.id)}>{e.nome}</option>)}
-          </select>
+          <BotaoAviso />
         </div>
-        <div style={{ display: 'flex', justifyContent: 'flex-end' }}><BotaoAviso /></div>
-        <div className="periodos filtros-caixa" role="group" aria-label="Mostrar">
+        <div className="busca wa-busca">
+          <i className="ti ti-search" aria-hidden="true" />
+          <input type="search" placeholder="Pesquisar nome, empresa ou telefone" aria-label="Pesquisar conversa" value={busca} onChange={(e) => setBusca(e.target.value)} />
+        </div>
+        <div className="wa-chips" role="group" aria-label="Mostrar">
           {FILTROS.map((x) => (
-            <button key={x.id} type="button" aria-pressed={f.filtro === x.id} title={x.dica} onClick={() => setF({ ...f, filtro: x.id })}>
-              {x.nome} <span className="n">{contagem[x.id]}</span>
+            <button key={x.id} type="button" className="wa-chip" aria-pressed={f.filtro === x.id} title={x.dica} onClick={() => setF({ ...f, filtro: x.id })}>
+              {x.nome}{x.id !== 'todas' && contagem[x.id] > 0 && <span className="n">{contagem[x.id]}</span>}
             </button>
           ))}
+          <label className="so-leitor" htmlFor="etq">Etiqueta</label>
+          <select id="etq" className="wa-chip wa-chip-lista" value={f.etiqueta} onChange={(e) => setF({ ...f, etiqueta: e.target.value })}>
+            <option value="">Etiquetas</option>
+            {etiquetas.map((e) => <option key={e.id} value={String(e.id)}>{e.nome}</option>)}
+          </select>
         </div>
       </div>
       <Estado carregando={carregando} erro={erro} recarregar={recarregar} forma="lista">
@@ -107,22 +110,22 @@ export default function CaixaLista({ itens, carregando, erro, recarregar, aberto
             {lista.map((c) => (
               <li key={c.contato_id}>
                 <button type="button" className="caixa-item" data-contato={c.contato_id} aria-current={aberto === c.contato_id ? 'true' : undefined} onClick={() => aoAbrir(c.contato_id)}>
-                  <Iniciais nome={c.nome} />
+                  <Iniciais nome={c.nome} id={c.contato_id} />
                   <span className="meio">
                     <span className="linha1">
                       <span className="quem">{c.nome}</span>
                       <span className={`hora${c.sem_ler ? ' forte' : ''}`}>{quando(c.ultima_em)}</span>
                     </span>
-                    {(c.empresas || []).length > 0 && <span className="empresa">{c.empresas[0]}{c.empresas.length > 1 ? ` +${c.empresas.length - 1}` : ''}</span>}
                     <span className="linha2">
                       <span className="previa">
-                        {c.ultima_de_nos && <i className="ti ti-arrow-back-up" aria-label="Nossa:" />}
+                        {c.ultima_de_nos && <i className="ti ti-checks" aria-label="Nossa:" />}
                         {c.ultima_texto || (c.ultima_tipo === 'audioMessage' ? 'Áudio' : c.ultima_tipo === 'imageMessage' ? 'Imagem' : 'Mensagem')}
                       </span>
                       {c.sem_ler > 0 && <span className="contador" aria-label={`${c.sem_ler} sem ler`}>{c.sem_ler}</span>}
                     </span>
-                    {(c.dono || c.retorno || c.resolvida || (c.etiquetas || []).length > 0) && (
+                    {((c.empresas || []).length > 0 || c.dono || c.retorno || c.resolvida || (c.etiquetas || []).length > 0) && (
                       <span className="linha3">
+                        {(c.empresas || []).length > 0 && <span className="empresa">{c.empresas[0]}{c.empresas.length > 1 ? ` +${c.empresas.length - 1}` : ''}</span>}
                         {c.retorno && <span className={`etq marca-retorno${c.retorno.dia <= h ? ' vence' : ''}`}><i className="ti ti-alarm" aria-hidden="true" />Retorno {rotuloRetorno(c.retorno, h)}</span>}
                         {c.resolvida && <span className="etq marca-resolvida"><i className="ti ti-circle-check" aria-hidden="true" />Resolvida</span>}
                         {c.dono &&<span className="dono"><i className="ti ti-user" aria-hidden="true" />{c.dono.id === eu?.id ? 'Você' : c.dono.nome.split(' ')[0]}</span>}
