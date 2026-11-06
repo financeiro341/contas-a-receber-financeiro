@@ -897,7 +897,7 @@ async function retratoOmie(usuario: Usuario, atualizar: boolean) {
       const r = await retratoDoOmie(consultar, dia);
       return (await rest("omie_retratos", {
         method: "POST",
-        body: JSON.stringify({ dia, calculado_por: usuario.nome, status: r.status, totais: r.totais, atrasados: r.atrasados }),
+        body: JSON.stringify({ dia, calculado_por: usuario.nome, status: r.status, totais: r.totais, atrasados: r.atrasados, atraso_clientes: r.atraso_clientes }),
       }))[0];
     } catch (e) {
       await rest("omie_retratos", { method: "POST", body: JSON.stringify({ dia, calculado_por: usuario.nome, status: "erro", totais: {}, atrasados: [] }) }).catch(() => {});

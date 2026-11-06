@@ -7,9 +7,13 @@
 // Da consulta B saem também os atrasados por cliente do Omie, para o "Quem cobrar hoje".
 //   D (só para o Quem cobrar, 06/11/2026): os mesmos atrasados de honorários dos anos anteriores (previsão de 01/01/2015
 //     a 31/12 do ano passado), para a lista mostrar também as maiores dívidas antigas. Não entra em nenhum total.
+//   E (Em atraso por cliente, 06/11/2026): títulos ATRASADOS de TODAS as categorias e de todos os anos (previsão de
+//     01/01/2015 a hoje), por cliente do Omie, para a coluna "Em atraso" da Cobrança do dia sair pela API e não
+//     depender do relatório das 17h30 (pedido do Marcus, 06/11, 14h46). Não entra em nenhum total; se falhar, os totais
+//     continuam valendo e a coluna fica com o relatório.
 
 export const CATEG = "1.02.02"; // Honorários
-export const VERSAO = "painel-cr omie_totais 2026-11-06 (conta do financeiro.py v8; atrasados de todos os anos)";
+export const VERSAO = "painel-cr omie_totais 2026-11-06b (conta do financeiro.py v8; atrasados de todos os anos; em atraso por cliente)";
 
 type Pagina = { nTotRegistros?: number; nTotPaginas?: number; titulosEncontrados?: any[] } | null;
 export type Consultar = (param: Record<string, unknown>) => Promise<Pagina>;
@@ -39,6 +43,7 @@ export function filtros(hoje: string) {
     aberto: { cNatureza: "R", cStatus: "ATRASADO", cCodCateg: CATEG, dDtPrevDe: br(p.ini), dDtPrevAte: br(hoje) },
     pagamento: { cNatureza: "R", cCodCateg: CATEG, dDtPagtoDe: br(p.ini_m), dDtPagtoAte: br(hoje) },
     antigos: { cNatureza: "R", cStatus: "ATRASADO", cCodCateg: CATEG, dDtPrevDe: "01/01/2015", dDtPrevAte: `31/12/${Number(hoje.slice(0, 4)) - 1}` },
+    todas_categorias: { cNatureza: "R", cStatus: "ATRASADO", dDtPrevDe: "01/01/2015", dDtPrevAte: br(hoje) },
   };
 }
 
@@ -171,6 +176,24 @@ export function calcular(hoje: string, venc: Map<number, any>, espV: number, abt
   return { totais, atrasados, status: totais.status as "completo" | "incompleto" };
 }
 
+// Em atraso por cliente (consulta E): soma do que está em aberto nos títulos atrasados, de qualquer categoria e ano.
+// Devolve null quando a leitura não veio inteira (assim a tela não mostra um valor menor do que o real).
+export function atrasoPorCliente(todos: Map<number, any>, esperado: number) {
+  if (todos.size < esperado) return null;
+  const m = new Map<number, { qtd: number; valor: number }>();
+  for (const t of todos.values()) {
+    const c = t.cabecTitulo, r = t.resumo || {};
+    if (c.cStatus === "CANCELADO" || (c.cNatureza || "R") !== "R") continue;
+    const ab = r.nValAberto || 0;
+    const cli = Number(c.nCodCliente);
+    if (ab <= 0 || !Number.isSafeInteger(cli) || cli <= 0) continue;
+    const x = m.get(cli) || { qtd: 0, valor: 0 };
+    x.qtd++; x.valor += ab;
+    m.set(cli, x);
+  }
+  return [...m.entries()].map(([cliente, x]) => ({ cliente, qtd: x.qtd, valor: r2(x.valor) }));
+}
+
 export async function retratoDoOmie(consultar: Consultar, hoje: string) {
   const f = filtros(hoje);
   // Uma consulta de cada vez (cada uma já lê 3 páginas ao mesmo tempo): o Omie recusa chamadas demais em paralelo.
@@ -178,5 +201,12 @@ export async function retratoDoOmie(consultar: Consultar, hoje: string) {
   const b = await todasAsPaginas(consultar, f.aberto);
   const c = await todasAsPaginas(consultar, f.pagamento);
   const d = await todasAsPaginas(consultar, f.antigos);
-  return calcular(hoje, a.titulos, a.esperado, b.titulos, b.esperado, c.titulos, c.esperado, d.titulos, d.esperado);
+  const r = calcular(hoje, a.titulos, a.esperado, b.titulos, b.esperado, c.titulos, c.esperado, d.titulos, d.esperado);
+  // E por último e à parte: se o Omie recusar ou o prazo acabar, os totais (A a D) já calculados continuam valendo.
+  let atraso_clientes: { cliente: number; qtd: number; valor: number }[] | null = null;
+  try {
+    const e = await todasAsPaginas(consultar, f.todas_categorias);
+    atraso_clientes = atrasoPorCliente(e.titulos, e.esperado);
+  } catch (_) { atraso_clientes = null; }
+  return { ...r, atraso_clientes };
 }

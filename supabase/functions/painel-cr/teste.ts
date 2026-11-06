@@ -77,6 +77,12 @@ globalThis.fetch = async (input: any, init: any = {}) => {
       if (db.omieBloqueado) { db.pesquisasBloqueadas = (db.pesquisasBloqueadas || 0) + 1; return resp({ faultstring: "ERROR: Consumo redundante detectado. Aguarde 60 segundos." }, 500); }
       db.pesquisas = [...(db.pesquisas || []), pr];
       const tt = (id: number, venc: string, st: string, valor: number, liq: number, aberto: number, cli = 77) => ({ cabecTitulo: { nCodTitulo: id, cCodCateg: "1.02.02", dDtVenc: venc, dDtPrevisao: venc, cStatus: st, nValorTitulo: valor, nCodCliente: cli, cNatureza: "R" }, resumo: { nValLiquido: liq, nValAberto: aberto }, lancamentos: liq ? [{ nCodLanc: id * 10, dDtLanc: "03/11/2026", nValLanc: liq }] : [] });
+      // Consulta E (todas as categorias, sem cCodCateg): honorários atrasados, um título de outra categoria e um cancelado.
+      if (pr.cStatus === "ATRASADO" && !pr.cCodCateg) {
+        if (db.falharE) return resp({ faultstring: "ERROR: falha simulada" }, 500);
+        const outra = { ...tt(8, "10/08/2026", "ATRASADO", 150, 0, 150), cabecTitulo: { ...tt(8, "10/08/2026", "ATRASADO", 150, 0, 150).cabecTitulo, cCodCateg: "1.02.97" } };
+        return resp({ nTotRegistros: 6, nTotPaginas: 1, titulosEncontrados: [tt(2, "10/10/2026", "ATRASADO", 500, 0, 500), tt(3, "10/09/2026", "ATRASADO", 300, 0, 300, 88), tt(6, "10/05/2024", "ATRASADO", 200, 0, 200), tt(7, "10/03/2025", "ATRASADO", 1000, 0, 1000, 99), outra, tt(9, "10/07/2026", "CANCELADO", 90, 0, 90)] });
+      }
       if (pr.cStatus === "ATRASADO" && String(pr.dDtPrevAte).startsWith("31/12/")) return resp({ nTotRegistros: 2, nTotPaginas: 1, titulosEncontrados: [tt(6, "10/05/2024", "ATRASADO", 200, 0, 200), tt(7, "10/03/2025", "ATRASADO", 1000, 0, 1000, 99)] });
       if (pr.cStatus === "ATRASADO") return resp({ nTotRegistros: 2, nTotPaginas: 1, titulosEncontrados: [tt(2, "10/10/2026", "ATRASADO", 500, 0, 500), tt(3, "10/09/2026", "ATRASADO", 300, 0, 300, 88)] });
       if (pr.dDtPagtoDe) return resp({ nTotRegistros: 1, nTotPaginas: 1, titulosEncontrados: [tt(1, "02/11/2026", "RECEBIDO", 1000, 1000, 0)] });
@@ -274,7 +280,11 @@ const midia = async (id: string) => { const r = await fetch(`http://fn/?acao=mid
   let [s, x] = await g("acao=omie_agora");
   const f = x.financeiro || {};
   ok(s === 200 && x.status === "completo" && f.titulos_faturado_mes === 2 && f.faturado_mes === 1700 && f.recebido_mes === 1000 && f.inadimplencia_total === 800 && f.a_vencer_mes === 700 && f.recebido_no_mes === 1000, "totais do Omie calculados na hora " + JSON.stringify({ s, f }));
-  ok(db.pesquisas.length === 5 && db.pesquisas.every((p: any) => p.nRegPorPagina === 50 && p.cCodCateg === "1.02.02" && p.cNatureza === "R"), "4 consultas de Honorários (3 dos totais e a dos anos anteriores), 50 por página, todas as páginas");
+  const honor = db.pesquisas.filter((p: any) => p.cCodCateg), todasCat = db.pesquisas.filter((p: any) => !p.cCodCateg);
+  ok(honor.length === 5 && honor.every((p: any) => p.nRegPorPagina === 50 && p.cCodCateg === "1.02.02" && p.cNatureza === "R"), "4 consultas de Honorários (3 dos totais e a dos anos anteriores), 50 por página, todas as páginas");
+  ok(todasCat.length === 1 && todasCat[0].cStatus === "ATRASADO" && todasCat[0].cNatureza === "R" && todasCat[0].dDtPrevDe === "01/01/2015" && todasCat[0].dDtPrevAte === "06/11/2026", "consulta E: atrasados de todas as categorias e anos, até hoje");
+  const ac = db.retratos[1].atraso_clientes || [], c77 = ac.find((a: any) => a.cliente === 77);
+  ok(ac.length === 3 && c77.qtd === 3 && c77.valor === 850 && ac.find((a: any) => a.cliente === 99).valor === 1000, "em atraso por cliente com todas as categorias, sem o cancelado " + JSON.stringify(ac));
   ok(f.inadimplencia_total === 800, "a dívida dos anos anteriores não entra nos totais");
   ok(db.retratos.length === 2 && db.retratos[0].status === "calculando", "trava gravada antes de consultar o Omie");
   const a77 = db.retratos[1].atrasados.find((a: any) => a.cliente === 77), a99 = db.retratos[1].atrasados.find((a: any) => a.cliente === 99);
@@ -287,7 +297,11 @@ const midia = async (id: string) => { const r = await fetch(`http://fn/?acao=mid
   [s, x] = await g("acao=omie_agora");
   ok(s === 200 && db.pesquisas.length === antes, "sem atualizar, o cálculo de 5 minutos vale");
   [s, x] = await g("acao=omie_agora&atualizar=1");
-  ok(s === 200 && db.pesquisas.length === antes + 5 && db.retratos.length === 4 && db.retratos[3].status === "completo", "atualizar depois de 2 minutos calcula de novo");
+  ok(s === 200 && db.pesquisas.length === antes + 6 && db.retratos.length === 4 && db.retratos[3].status === "completo", "atualizar depois de 2 minutos calcula de novo");
+  db.falharE = true; db.retratos[3].calculado_em = new Date(Date.now() - 5 * 60_000).toISOString();
+  [s, x] = await g("acao=omie_agora&atualizar=1");
+  ok(s === 200 && db.retratos.length === 6 && db.retratos[5].status === "completo" && db.retratos[5].atraso_clientes === null && db.retratos[5].totais.inadimplencia_total === 800, "falha na consulta E não derruba os totais (em atraso fica sem dado)");
+  db.falharE = false;
   [s, x] = await g("acao=quem_cobrar");
   ok(s === 200 && db.quemCobrar.p_atrasados.length === 3 && x.contatos.length === 1 && x.calculado_em, "quem cobrar usa os atrasados do retrato");
   [s, x] = await g("acao=omie");

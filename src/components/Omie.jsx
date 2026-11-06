@@ -201,14 +201,14 @@ export default function Omie({ abrirConversa, eu }) {
             </>
           )}
 
-          <div className="omie-secao"><h2>Maiores atrasos entre os cobrados</h2><span>do relatório de {dataCurta(dados.dia)}, títulos em atraso de todas as categorias</span></div>
+          <div className="omie-secao"><h2>Maiores atrasos entre os cobrados</h2><span>{dados.atrasos_fonte === 'api' ? `cobrados de hoje, Omie às ${new Date(dados.atrasos_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bahia' })}` : `do relatório de ${dataCurta(dados.atrasos_dia || dados.dia)}`}, títulos em atraso de todas as categorias</span></div>
           <section className="cartao omie-ranking-cartao" aria-label="Maiores atrasos entre os cobrados">
-            {atrasos.length === 0 ? <Vazio icone="ti-circle-check" titulo="Nenhum atraso entre os cobrados" texto="O último relatório não registrou título em atraso para quem foi cobrado." /> : (
+            {atrasos.length === 0 ? <Vazio icone="ti-circle-check" titulo="Nenhum atraso entre os cobrados" texto="Nenhum dos clientes cobrados tem título em atraso no Omie." /> : (
               <>
                 <ol className="omie-ranking">
                   {atrasos.slice(0, todos ? atrasos.length : 8).map((c, i) => (
                     <li key={c.contato_id}>
-                      <button type="button" onClick={() => abrirConversa(c.contato_id, dados.dia)}>
+                      <button type="button" onClick={() => abrirConversa(c.contato_id, dados.atrasos_dia || dados.dia)}>
                         <span className="pos" aria-hidden="true">{i + 1}</span>
                         <span className={`avatar sit-${c.situacao || 'so_boleto'}`} aria-hidden="true">{iniciais(c.nome) || <i className="ti ti-user" />}</span>
                         <span className="quem">

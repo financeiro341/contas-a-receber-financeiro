@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { lerDia } from '../lib/api.js';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { lerDia, lerOmieAgora } from '../lib/api.js';
 import { NOME_SITUACAO, ORDEM_SITUACAO, PAGARAM_OU_PROMETERAM } from '../constants.js';
 import { brl, dataCurta, dataLonga, inteiro, pct, plural } from '../utils/formato.js';
 import { AbasSituacao, Estado, Kpi, Vazio, baixarCsv, iniciais, useDados } from './comum.jsx';
@@ -32,6 +32,22 @@ export default function Hoje({ dia, ehHoje, nome, abrirConversa, abrirNaCaixa })
   const [busca, setBusca] = useState('');
 
   const r = dados?.resumo || {};
+
+  // "Em atraso" pela API do Omie (pedido do Marcus, 06/11/2026, 14h46): no dia de hoje, se não há cálculo com o atraso por
+  // cliente ou o último tem mais de 30 minutos, o sistema consulta o Omie (só consulta) e relê a lista. No máximo uma vez a
+  // cada 30 minutos por tela aberta; o cálculo é o mesmo da aba Omie e do Quem cobrar (um por vez para todo o sistema).
+  const [omieAuto, setOmieAuto] = useState(null); // null | 'calculando' | { erro }
+  const pedidoEm = useRef(0);
+  useEffect(() => {
+    if (!ehHoje || !dados || omieAuto === 'calculando') return;
+    const ultimo = Date.parse(r.atraso_em || '');
+    const velho = r.atraso_fonte !== 'api' || Number.isNaN(ultimo) || Date.now() - ultimo > 30 * 60_000;
+    if (!velho || Date.now() - pedidoEm.current < 30 * 60_000) return;
+    pedidoEm.current = Date.now();
+    setOmieAuto('calculando');
+    lerOmieAgora(false).then(() => { setOmieAuto(null); recarregar(); }).catch((e) => setOmieAuto({ erro: e.message }));
+  }, [dados, ehHoje]); // eslint-disable-line react-hooks/exhaustive-deps
+  const horaAtraso = r.atraso_em ? new Date(r.atraso_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bahia' }) : '';
   const ps = r.por_situacao || {};
   const pp = PAGARAM_OU_PROMETERAM.reduce((a, k) => a + (ps[k] || 0), 0);
   const lig = r.ligacoes || {};
@@ -92,8 +108,12 @@ export default function Hoje({ dia, ehHoje, nome, abrirConversa, abrirNaCaixa })
             <Kpi icone="ti-cash" rotulo="Pagou ou prometeu" valor={inteiro(pp)} apoio={`${inteiro((ps.pagou || 0) + (ps.pagou_parcial || 0))} com pagamento`} barra={proporcao(pp)} corBarra="--sit-pagou" aoClicar={() => filtrarPor('g:pagou_prometeu')} ativo={filtro === 'g:pagou_prometeu'} />
             <Kpi icone="ti-phone" rotulo="Ligações" valor={inteiro(lig.total)} apoio={`${inteiro(lig.atendidas)} ${plural(lig.atendidas, 'atendida', 'atendidas')}, ${inteiro(lig.feitas)} ${plural(lig.feitas, 'feita', 'feitas')} por nós e ${inteiro((lig.total || 0) - (lig.feitas || 0))} ${plural((lig.total || 0) - (lig.feitas || 0), 'recebida', 'recebidas')}`} aoClicar={() => filtrarPor('g:ligacoes')} ativo={filtro === 'g:ligacoes'} />
             {r.atraso_total == null
-              ? <Kpi icone="ti-building-bank" tom="vazio" rotulo="Em atraso no Omie" valor="Entra às 17h30" apoio="com o relatório do fim da tarde" />
-              : <Kpi icone="ti-building-bank" rotulo="Em atraso no Omie" dinheiro valor={brl(r.atraso_total)} apoio="Soma dos clientes cobrados" aoClicar={() => filtrarPor('g:atraso')} ativo={filtro === 'g:atraso'} />}
+              ? <Kpi icone="ti-building-bank" tom="vazio" rotulo="Em atraso no Omie"
+                  valor={ehHoje && !omieAuto?.erro ? 'Consultando…' : 'Sem dado'}
+                  apoio={omieAuto?.erro ? `Não deu para consultar o Omie: ${omieAuto.erro}` : ehHoje ? 'no Omie, pela API, leva cerca de 1 minuto' : 'dia sem cálculo do Omie guardado'} />
+              : <Kpi icone="ti-building-bank" rotulo="Em atraso no Omie" dinheiro valor={brl(r.atraso_total)}
+                  apoio={r.atraso_fonte === 'api' ? `Soma dos cobrados, Omie às ${horaAtraso}${omieAuto === 'calculando' ? ' (atualizando)' : ''}` : 'Soma dos cobrados, do relatório das 17h30'}
+                  aoClicar={() => filtrarPor('g:atraso')} ativo={filtro === 'g:atraso'} />}
           </section>
 
           {(dados.retornos || []).length > 0 && (
