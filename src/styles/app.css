@@ -887,3 +887,123 @@ select.wa-chip { appearance: none; padding-right: 28px; background-image: linear
 @media (max-width: 1100px) { .grade-historico { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 560px) { .nota-periodo { margin-top: -8px; } .estado-leitura .periodos { flex-wrap: wrap; } }
 .selo-periodo { display: inline-flex; align-items: center; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-pill); padding: 6px 12px; font-size: 13px; color: var(--text-secondary); box-shadow: var(--shadow-sm); }
+
+/* Aba Omie no visual novo (aprovado pelo Marcus, 06/11/2026). Verde = recebido, vermelho = inadimplente, azul = a vencer,
+   ouro = faturado (os tokens --sit-* e --accent, já conferidos nos dois temas). */
+.c-rec { background: var(--sit-pagou); } .c-atr { background: var(--sit-sem); } .c-ven { background: var(--sit-prometeu); } .c-fat { background: var(--accent); }
+.centavos { font-size: .62em; font-weight: 600; opacity: .8; }
+.omie-acoes { gap: 12px; }
+.omie-acoes .baixar-relatorio { margin: 0; flex-direction: row; gap: 10px; }
+.omie-acoes .baixar-relatorio .mini { flex: 0 1 260px; min-width: 0; text-align: left; }
+.omie-acoes .baixar-relatorio .botao.principal { min-height: 40px; border-radius: 10px; box-shadow: var(--shadow-sm); }
+.omie-ano { position: relative; overflow: hidden; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 32px; align-items: center; padding: 24px 28px;
+  border-radius: 18px; background: var(--bg-elevated); color: var(--text-secondary); box-shadow: var(--shadow-md); }
+.omie-selo { position: absolute; right: -24px; bottom: -40px; width: 220px; height: 220px; opacity: .06; pointer-events: none; }
+.omie-ano > *:not(.omie-selo) { position: relative; }
+.omie-anel { width: 168px; height: 168px; border-radius: 50%; display: grid; place-items: center;
+  background: conic-gradient(var(--sit-pagou) 0 calc(var(--p) * 1%), var(--sit-sem) calc(var(--p) * 1%) 100%); }
+.omie-anel > div { width: 124px; height: 124px; border-radius: 50%; background: var(--bg-elevated); display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.omie-anel b { font-size: 34px; font-weight: 700; letter-spacing: -0.03em; line-height: 1; color: var(--text-primary); }
+.omie-anel span { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+.omie-ano h2 { font-size: 13px; font-weight: 600; color: var(--accent-text); letter-spacing: .02em; text-transform: uppercase; }
+.omie-total { margin: 4px 0 2px; font-size: 26px; font-weight: 700; color: var(--text-primary); letter-spacing: -0.02em; }
+.omie-frase { margin: 0 0 16px; font-size: 15px; color: var(--text-primary); max-width: 52ch; }
+.omie-frase b { color: #8BE0AE; }
+.omie-ano-nums { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 32px; }
+.omie-ano-nums .rot { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-muted); }
+.omie-ano-nums .rot i { width: 10px; height: 10px; border-radius: 3px; }
+.omie-ano-nums b { display: block; font-size: 28px; font-weight: 700; color: var(--text-primary); letter-spacing: -0.025em; margin-top: 2px; white-space: nowrap; }
+.omie-ano-nums small, .omie-hoje small { display: block; color: var(--text-muted); font-size: 12px; }
+.omie-hoje { width: 270px; display: flex; flex-direction: column; gap: 4px; padding: 16px 18px; border-radius: 14px; background: rgba(255,255,255,.06); border: 1px solid var(--border); }
+.omie-hoje .rot { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.luz-verde { width: 8px; height: 8px; border-radius: 50%; background: #8BE0AE; box-shadow: 0 0 0 3px rgba(139,224,174,.2); }
+.omie-hoje b { margin-top: 4px; font-size: 28px; font-weight: 700; letter-spacing: -0.025em; color: #8BE0AE; white-space: nowrap; }
+.omie-hoje-mes { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 13px; color: var(--text-primary); }
+.omie-secao { display: flex; align-items: baseline; gap: 6px 10px; flex-wrap: wrap; margin: 28px 0 12px; }
+.omie-secao h2 { font-size: 18px; font-weight: 700; letter-spacing: -0.015em; }
+.omie-secao span { color: var(--text-muted); font-size: 13px; }
+.omie-mes { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 16px; align-items: stretch; }
+.omie-mes > .cartao { display: flex; flex-direction: column; padding: 18px 20px; }
+.omie-mes h2, .omie-ranking-cartao h2 { font-size: 16px; font-weight: 700; }
+.omie-mes .sub { font-size: 12.5px; }
+.omie-regua { display: flex; gap: 3px; height: 22px; border-radius: 11px; overflow: hidden; margin: 18px 0; background: var(--bg-subtle); }
+.omie-regua i { display: block; height: 100%; flex-basis: 0; }
+.omie-leg { flex: 1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.omie-leg > div { display: flex; flex-direction: column; justify-content: center; border-radius: 12px; padding: 12px 14px; min-width: 0; }
+.omie-leg .rot { font-size: 12.5px; font-weight: 600; display: flex; gap: 6px; align-items: center; }
+.omie-leg .bolinha { width: 8px; height: 8px; }
+.omie-leg b { margin-top: 4px; font-size: 20px; font-weight: 700; letter-spacing: -0.02em; color: var(--text-primary); overflow-wrap: anywhere; }
+.omie-leg small { font-size: 12px; color: var(--text-secondary); }
+.leg-rec { background: var(--sit-pagou-bg); } .leg-rec .rot { color: var(--sit-pagou-tx); }
+.leg-atr { background: var(--sit-sem-bg); } .leg-atr .rot { color: var(--sit-sem-tx); }
+.leg-ven { background: var(--sit-prometeu-bg); } .leg-ven .rot { color: var(--sit-prometeu-tx); }
+.omie-fxr-linhas { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 16px; margin-top: 14px; }
+.omie-fxr-linhas .topo-l { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 13px; color: var(--text-secondary); }
+.omie-fxr-linhas .topo-l b { font-size: 20px; color: var(--text-primary); letter-spacing: -0.02em; white-space: nowrap; }
+.omie-fxr-linhas .trilha { height: 12px; border-radius: 6px; background: var(--bg-subtle); overflow: hidden; margin-top: 6px; }
+.omie-fxr-linhas .trilha i { display: block; height: 100%; border-radius: 6px; }
+.omie-fxr-linhas small { display: block; color: var(--text-muted); font-size: 12px; margin-top: 4px; }
+.omie-fxr-pct { margin: 14px 0 0; padding-top: 12px; border-top: 1px solid var(--border); display: flex; align-items: baseline; gap: 8px; font-size: 13px; color: var(--text-secondary); }
+.omie-fxr-pct b { font-size: 22px; color: var(--sit-pagou-tx); letter-spacing: -0.02em; }
+.omie-ranking-cartao { padding: 8px 14px 14px; }
+.omie-ranking { list-style: none; margin: 0; padding: 0; }
+.omie-ranking li + li { border-top: 1px solid var(--border); }
+.omie-ranking button { width: 100%; border: 0; background: none; color: inherit; display: grid; grid-template-columns: 28px 40px minmax(0, 1.2fr) minmax(0, 1.4fr) 120px 20px; gap: 14px; align-items: center; padding: 11px 6px; text-align: left; cursor: pointer; border-radius: 10px; }
+.omie-ranking button:hover { background: var(--bg-subtle); }
+.omie-ranking .pos { font-size: 13px; font-weight: 700; color: var(--text-muted); text-align: center; }
+.omie-ranking .avatar { width: 40px; height: 40px; font-size: 13px; }
+.omie-ranking .quem { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 1px; }
+.omie-ranking .quem b { font-weight: 600; color: var(--text-primary); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.omie-ranking .emp { font-size: 12.5px; color: var(--text-muted); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.omie-ranking .etiqueta-sit { margin-top: 3px; font-size: 12px; padding: 2px 9px 2px 7px; }
+.omie-ranking .barra-c { display: block; height: 10px; border-radius: 5px; background: var(--bg-subtle); overflow: hidden; }
+.omie-ranking .barra-c i { display: block; height: 100%; border-radius: 5px; background: linear-gradient(90deg, var(--sit-sem), color-mix(in srgb, var(--sit-sem) 70%, var(--accent))); }
+.omie-ranking .val { text-align: right; white-space: nowrap; }
+.omie-ranking .val b { display: block; font-weight: 700; color: var(--text-primary); }
+.omie-ranking .val small { font-size: 12px; color: var(--text-muted); }
+.omie-ranking .ir { color: var(--text-muted); font-size: 18px; }
+.omie-ranking button:hover .ir { color: var(--accent-text); }
+.cliente-celula .avatar.sit-so_boleto, .omie-ranking .avatar.sit-so_boleto { background: var(--sit-boleto-bg); color: var(--sit-boleto-tx); }
+.omie-ranking .avatar.sit-pagou { background: var(--sit-pagou-bg); color: var(--sit-pagou-tx); }
+.omie-ranking .avatar.sit-pagou_parcial { background: var(--sit-parcial-bg); color: var(--sit-parcial-tx); }
+.omie-ranking .avatar.sit-disse_que_pagou { background: var(--sit-disse-bg); color: var(--sit-disse-tx); }
+.omie-ranking .avatar.sit-prometeu { background: var(--sit-prometeu-bg); color: var(--sit-prometeu-tx); }
+.omie-ranking .avatar.sit-respondeu_sem_pagar { background: var(--sit-respondeu-bg); color: var(--sit-respondeu-tx); }
+.omie-ranking .avatar.sit-sem_retorno { background: var(--sit-sem-bg); color: var(--sit-sem-tx); }
+.omie-ver-todos { display: flex; margin: 8px auto 0; border: 1px solid var(--border-strong); background: var(--bg-elevated); color: var(--text-primary); border-radius: var(--radius-pill); padding: 8px 16px; font-weight: 600; cursor: pointer; }
+.omie-inad-topo { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px 16px; flex-wrap: wrap; }
+.omie-inad-topo .rot { font-size: 12.5px; font-weight: 600; color: var(--text-muted); }
+.omie-inad-topo b { display: block; font-size: 28px; font-weight: 700; letter-spacing: -0.025em; color: var(--sit-sem-tx); }
+.omie-inad-topo small { color: var(--text-muted); font-size: 12.5px; }
+.omie-delta { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-secondary); flex-wrap: wrap; }
+.omie-delta b { display: inline-flex; padding: 3px 10px; border-radius: var(--radius-pill); font-size: 13px; }
+.omie-delta.sobe b { background: var(--sit-sem-bg); color: var(--sit-sem-tx); }
+.omie-delta.cai b { background: var(--sit-pagou-bg); color: var(--sit-pagou-tx); }
+.omie-dias { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 6px; align-items: end; height: 170px; margin-top: 18px; }
+.omie-dia { display: flex; flex-direction: column; align-items: center; gap: 5px; height: 100%; justify-content: flex-end; min-width: 0; }
+.omie-dia em { font-style: normal; font-size: 11px; font-weight: 600; color: var(--text-muted); white-space: nowrap; }
+.omie-dia i { display: block; width: 100%; max-width: 46px; min-height: 3px; border-radius: 5px 5px 0 0; background: color-mix(in srgb, var(--sit-sem) 35%, var(--bg-subtle)); }
+.omie-dia small { font-size: 11.5px; color: var(--text-muted); }
+.omie-dia.atual em, .omie-dia.atual small { color: var(--sit-sem-tx); font-weight: 700; }
+.omie-dia.atual i { background: var(--sit-sem); }
+.omie-dia.futuro i, .omie-dia.sem i { background: none; min-height: 0; height: 0; border-radius: 0; border-bottom: 2px dashed var(--border-strong); }
+.omie-dia.futuro small { opacity: .6; }
+.omie-sem-nota { margin: 10px 0 0; }
+.omie-fonte { margin: 22px 2px 0; }
+@media (max-width: 1100px) {
+  .omie-ano { grid-template-columns: auto minmax(0, 1fr); }
+  .omie-hoje { grid-column: 1 / -1; width: 100%; }
+  .omie-mes { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 760px) {
+  .omie-ano { grid-template-columns: minmax(0, 1fr); justify-items: center; text-align: center; padding: 22px 18px; gap: 20px; }
+  .omie-ano-nums { grid-template-columns: minmax(0, 1fr); text-align: left; width: 100%; }
+  .omie-ano-nums b, .omie-hoje b { font-size: 24px; }
+  .omie-hoje { text-align: left; }
+  .omie-leg { grid-template-columns: minmax(0, 1fr); }
+  .omie-ranking button { grid-template-columns: 22px 36px minmax(0, 1fr) auto; gap: 10px; }
+  .omie-ranking .barra-c, .omie-ranking .ir { display: none; }
+  .omie-ranking .avatar { width: 36px; height: 36px; }
+  .omie-dias { overflow-x: auto; grid-auto-columns: 34px; }
+  .omie-acoes { width: 100%; }
+}

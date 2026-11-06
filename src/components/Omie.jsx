@@ -3,8 +3,8 @@ import { lerDia, lerOmie, lerOmieAgora } from '../lib/api.js';
 import { dadosDoDia, gerarPdf, nomeDoArquivo } from '../utils/relatorioPdf.js';
 import leao from '../assets/leao.png';
 import { NOME_SITUACAO } from '../constants.js';
-import { brl, dataCurta, hoje, inteiro, nomeMes } from '../utils/formato.js';
-import { Estado, Kpi, Vazio, useDados } from './comum.jsx';
+import { brl, dataCurta, diaSemana, hoje, inteiro, nomeMes, somarDias } from '../utils/formato.js';
+import { Estado, Vazio, iniciais, useDados } from './comum.jsx';
 
 // Data e hora no horário de Brasília (o cálculo feito na hora vem em UTC; o do relatório, com o fuso).
 const quando = (iso) => {
@@ -59,61 +59,187 @@ function BaixarRelatorio({ eu, aoCalcular }) {
   );
 }
 
-// Totais do Omie (os mesmos do relatório de cobrança, tarefa das 16h11) e os maiores atrasos dos cobrados.
+// Valor com os centavos menores (só visual; o leitor de tela lê o valor inteiro).
+function Dinheiro({ valor }) {
+  const t = brl(valor);
+  const k = t.lastIndexOf(',');
+  return <>{t.slice(0, k)}<span className="centavos">{t.slice(k)}</span></>;
+}
+// "503,2 mil" (sem quebra de linha entre o número e o "mil").
+const mil = (v) => (Math.abs(v) >= 1000 ? `${(v / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}\u00a0mil` : brl(v).replace(/,00$/, ''));
+const comReal = (t) => (t.startsWith('R$') ? t : `R$\u00a0${t}`);
+
+// Dias úteis de um mês (AAAA-MM-01 até o último dia), sem feriados.
+function diasUteis(inicio, fim) {
+  const lista = [];
+  for (let d = inicio; d <= fim; d = somarDias(d, 1)) if (![0, 6].includes(diaSemana(d))) lista.push(d);
+  return lista;
+}
+
+// Aba Omie no visual novo (aprovado pelo Marcus, 06/11/2026): faixa do ano com o anel recebido x inadimplência e o que entrou
+// no caixa hoje; o mês em régua (recebido, inadimplente, a vencer) e faturado x entrou; os maiores atrasos dos cobrados; e a
+// inadimplência do mês dia a dia, pelos relatórios das 17h30. Só consulta ao Omie.
 export default function Omie({ abrirConversa, eu }) {
   const { dados, erro, carregando, recarregar, atualizar } = useDados(() => lerOmie(), []);
-  const tom = (v) => (v == null ? undefined : Number(v) > 0 ? 'perigo' : 'bom');
+  const [todos, setTodos] = useState(false);
   const f = dados?.financeiro || null;
   const mes = f?.inicio_mes ? nomeMes(f.inicio_mes) : '';
+  const ano = String(f?.inicio || '').slice(0, 4);
+  const n = (v) => Number(v || 0);
+
+  // Dia do cálculo mostrado e o relatório anterior a ele (para "hoje" e para a variação).
+  const diaCalc = f?.totais_ate || dados?.dia || hoje();
+  const evol = (dados?.evolucao || []).filter((e) => e.dia < diaCalc);
+  const anterior = evol[evol.length - 1] || null;
+  const mesmoMes = anterior && f?.inicio_mes && anterior.inicio_mes === f.inicio_mes;
+  const rotuloDia = diaCalc === hoje() ? 'hoje' : dataCurta(diaCalc);
+
+  const vencidoAno = n(f?.recebido_total) + n(f?.inadimplencia_total);
+  const pctRecebido = vencidoAno ? Math.round((n(f?.recebido_total) / vencidoAno) * 100) : 0;
+  const totalMes = n(f?.recebido_mes) + n(f?.inadimplencia_mes) + n(f?.a_vencer_mes);
+  const pctMes = (v) => (totalMes ? Math.round((n(v) / totalMes) * 100) : 0);
+  const entrouHoje = mesmoMes ? n(f?.recebido_no_mes) - n(anterior.recebido_no_mes) : null;
+  const recebimentosHoje = mesmoMes ? n(f?.titulos_recebidos_no_mes) - n(anterior.titulos_recebidos_no_mes) : null;
+  const deltaMes = mesmoMes ? n(f?.inadimplencia_mes) - n(anterior.inadimplencia_mes) : null;
+
+  // Inadimplência do mês, um ponto por dia útil: relatórios dos dias que passaram, o cálculo atual no dia dele, e os
+  // dias que ainda vão chegar em pontilhado.
+  const porDia = Object.fromEntries((dados?.evolucao || []).filter((e) => e.inicio_mes === f?.inicio_mes).map((e) => [e.dia, n(e.inadimplencia_mes)]));
+  if (f?.inicio_mes) porDia[diaCalc] = n(f.inadimplencia_mes);
+  const dias = f?.inicio_mes ? diasUteis(f.inicio_mes, f.fim_mes || diaCalc) : [];
+  const maxDia = Math.max(1, ...Object.values(porDia));
+  const atrasos = dados?.atrasos || [];
+  const maxAtraso = Math.max(1, ...atrasos.map((c) => n(c.atraso_valor)));
+
   return (
     <Estado carregando={carregando} erro={erro} recarregar={recarregar}>
-      <BaixarRelatorio eu={eu} aoCalcular={atualizar} />
+      <div className="cabeca-dia">
+        <div>
+          <p className="ola">Honorários no Omie</p>
+          <p className="data-pagina">{ano ? `Carteira de ${ano}` : 'Carteira'}</p>
+        </div>
+        <div className="estado-leitura omie-acoes">
+          {f?.atualizado && <span><span className="luz ok" aria-hidden="true" />Calculado no Omie {quando(f.atualizado)}</span>}
+          <BaixarRelatorio eu={eu} aoCalcular={atualizar} />
+        </div>
+      </div>
       {!f ? <div className="cartao"><Vazio icone="ti-building-bank" titulo="Ainda sem totais do Omie" texto="Eles entram com o primeiro relatório gravado, todo dia útil depois das 17h30." /></div> : (
         <>
-          <div className="linha-status">
-            <span><i className="ti ti-building-bank" aria-hidden="true" /> Omie, relatórios Faturado X Recebido e Contas a Receber, Inadimplência (Honorários){f.atualizado ? `, calculados em ${quando(f.atualizado)}` : ''}</span>
-          </div>
-          <div className="secao-titulo">Carteira de {String(f.inicio || '').slice(0, 4)}<span>vencimentos de {dataCurta(f.inicio)} a {dataCurta(f.totais_ate)}</span></div>
-          <section className="grade g-2">
-            <Kpi icone="ti-circle-check" rotulo="Valor recebido" dinheiro valor={brl(f.recebido_total)} apoio={f.titulos != null ? `${inteiro(f.titulos)} títulos no período` : null} />
-            <Kpi icone="ti-alert-triangle" rotulo="Inadimplência" tom={tom(f.inadimplencia_total)} dinheiro valor={brl(f.inadimplencia_total)} apoio={f.titulos_inadimplentes != null ? `${inteiro(f.titulos_inadimplentes)} títulos em aberto` : null} />
-          </section>
-          {f.inicio_mes && (
-            <>
-              <div className="secao-titulo">Mês vigente<span>vencimentos de {dataCurta(f.inicio_mes)} a {dataCurta(f.fim_mes || f.totais_ate)}</span></div>
-              <section className="grade g-3">
-                <Kpi icone="ti-circle-check" rotulo="Valor recebido" dinheiro valor={brl(f.recebido_mes)} apoio={f.titulos_mes != null ? `${inteiro(f.titulos_mes)} títulos do mês` : null} />
-                <Kpi icone="ti-alert-triangle" rotulo="Inadimplência" tom={tom(f.inadimplencia_mes)} dinheiro valor={brl(f.inadimplencia_mes)} apoio={f.titulos_inadimplentes_mes != null ? `${inteiro(f.titulos_inadimplentes_mes)} vencidos em aberto` : null} />
-                <Kpi icone="ti-calendar-due" rotulo="A vencer" dinheiro valor={brl(f.a_vencer_mes)} apoio={f.titulos_a_vencer_mes != null ? `${inteiro(f.titulos_a_vencer_mes)} títulos em aberto` : null} />
-              </section>
-              <section className="grade g-2 bloco">
-                <Kpi icone="ti-file-invoice" rotulo={`Faturado de honorários em ${mes}`} dinheiro valor={brl(f.faturado_mes)} apoio={f.titulos_faturado_mes != null ? `${inteiro(f.titulos_faturado_mes)} títulos, pagos e em aberto` : null} />
-                <Kpi icone="ti-cash-banknote" rotulo={`Entrou em ${mes}`} dinheiro valor={brl(f.recebido_no_mes)} apoio={f.titulos_recebidos_no_mes != null ? `${inteiro(f.titulos_recebidos_no_mes)} recebimentos, de qualquer vencimento` : 'Recebimentos de honorários do mês'} />
-              </section>
-            </>
-          )}
-          <section className="cartao bloco" aria-labelledby="t-atrasos">
-            <h2 id="t-atrasos"><i className="ti ti-alert-circle" aria-hidden="true" />Maiores atrasos entre os clientes cobrados</h2>
-            <div className="sub">Do relatório de {dataCurta(dados.dia)}: títulos em atraso no Omie (todas as categorias) de quem foi cobrado no dia.</div>
-            {(dados.atrasos || []).length === 0 ? <Vazio icone="ti-circle-check" titulo="Nenhum atraso entre os cobrados" texto="O último relatório não registrou título em atraso para quem foi cobrado." /> : (
-              <div className="rolagem">
-                <table className="tabela em-cartoes">
-                  <thead><tr><th>Cliente</th><th>Situação no dia</th><th className="num">Títulos</th><th className="num">Em atraso</th></tr></thead>
-                  <tbody>
-                    {dados.atrasos.map((c) => (
-                      <tr key={c.contato_id} className="clicavel" onClick={() => abrirConversa(c.contato_id, dados.dia)}>
-                        <td><button type="button" className="linha-botao nome" onClick={(e) => { e.stopPropagation(); abrirConversa(c.contato_id, dados.dia); }}>{c.nome}<span className="so-leitor">, abrir a conversa</span></button>
-                          {(c.empresas || []).length > 0 && <div className="empresa">{c.empresas.slice(0, 2).join(' · ')}</div>}</td>
-                        <td><span className="chip"><span className={`bolinha s-${c.situacao}`} aria-hidden="true" />{NOME_SITUACAO[c.situacao] || c.situacao || '—'}</span></td>
-                        <td className="num" data-rotulo="Títulos">{inteiro(c.atraso_qtd)}</td>
-                        <td className="num" data-rotulo="Em atraso"><b style={{ color: 'var(--text-primary)' }}>{brl(c.atraso_valor)}</b></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+          <section className="omie-ano tema-escuro" aria-labelledby="t-ano">
+            <img className="omie-selo" src={leao} alt="" />
+            <div className="omie-anel" style={{ '--p': pctRecebido }} role="img" aria-label={`${pctRecebido}% do valor vencido no ano já foi recebido`}>
+              <div><b>{pctRecebido}%</b><span>recebido</span></div>
+            </div>
+            <div className="omie-ano-meio">
+              <h2 id="t-ano">Honorários vencidos de {dataCurta(f.inicio)} a {dataCurta(f.totais_ate)}</h2>
+              <p className="omie-total"><Dinheiro valor={vencidoAno} /></p>
+              <p className="omie-frase">De cada R$&nbsp;100 que venceram no ano, <b>R$&nbsp;{pctRecebido} já entraram</b>. Faltam {comReal(mil(n(f.inadimplencia_total)))}.</p>
+              <div className="omie-ano-nums">
+                <div><span className="rot"><i className="c-rec" aria-hidden="true" />Recebido</span><b><Dinheiro valor={f.recebido_total} /></b>{f.titulos != null && <small>{inteiro(f.titulos)} títulos no período</small>}</div>
+                <div><span className="rot"><i className="c-atr" aria-hidden="true" />Inadimplência</span><b><Dinheiro valor={f.inadimplencia_total} /></b>{f.titulos_inadimplentes != null && <small>{inteiro(f.titulos_inadimplentes)} títulos em aberto</small>}</div>
+              </div>
+            </div>
+            {f.recebido_no_mes != null && (
+              <div className="omie-hoje">
+                <span className="rot"><span className="luz-verde" aria-hidden="true" />{entrouHoje != null && entrouHoje >= 0 ? `Entrou no caixa ${rotuloDia}` : `Entrou no caixa em ${mes}`}</span>
+                <b><Dinheiro valor={entrouHoje != null && entrouHoje >= 0 ? entrouHoje : f.recebido_no_mes} /></b>
+                {entrouHoje != null && entrouHoje >= 0
+                  ? <small>{inteiro(recebimentosHoje)} {recebimentosHoje === 1 ? 'recebimento' : 'recebimentos'} desde o relatório de {dataCurta(anterior.dia)}</small>
+                  : <small>{f.titulos_recebidos_no_mes != null ? `${inteiro(f.titulos_recebidos_no_mes)} recebimentos` : 'recebimentos de qualquer vencimento'}</small>}
+                {entrouHoje != null && entrouHoje >= 0 && <span className="omie-hoje-mes">No mês: {brl(f.recebido_no_mes)}</span>}
               </div>
             )}
           </section>
+
+          {f.inicio_mes && (
+            <>
+              <div className="omie-secao"><h2>{mes.charAt(0).toUpperCase() + mes.slice(1)}</h2><span>vencimentos de {dataCurta(f.inicio_mes)} a {dataCurta(f.fim_mes || f.totais_ate)}</span></div>
+              <div className="omie-mes">
+                <section className="cartao" aria-labelledby="t-mes">
+                  <h2 id="t-mes">Títulos que vencem no mês</h2>
+                  <p className="sub">{brl(totalMes)}</p>
+                  <div className="omie-regua" role="img" aria-label={`${pctMes(f.recebido_mes)}% recebido, ${pctMes(f.inadimplencia_mes)}% inadimplente, ${pctMes(f.a_vencer_mes)}% a vencer`}>
+                    {n(f.recebido_mes) > 0 && <i className="c-rec" style={{ flexGrow: n(f.recebido_mes) }} />}
+                    {n(f.inadimplencia_mes) > 0 && <i className="c-atr" style={{ flexGrow: n(f.inadimplencia_mes) }} />}
+                    {n(f.a_vencer_mes) > 0 && <i className="c-ven" style={{ flexGrow: n(f.a_vencer_mes) }} />}
+                  </div>
+                  <div className="omie-leg">
+                    <div className="leg-rec"><span className="rot"><span className="bolinha c-rec" aria-hidden="true" />Recebido, {pctMes(f.recebido_mes)}%</span><b>{brl(f.recebido_mes)}</b>{f.titulos_mes != null && <small>{inteiro(f.titulos_mes)} títulos do mês</small>}</div>
+                    <div className="leg-atr"><span className="rot"><span className="bolinha c-atr" aria-hidden="true" />Inadimplente, {pctMes(f.inadimplencia_mes)}%</span><b>{brl(f.inadimplencia_mes)}</b>{f.titulos_inadimplentes_mes != null && <small>{inteiro(f.titulos_inadimplentes_mes)} vencidos em aberto</small>}</div>
+                    <div className="leg-ven"><span className="rot"><span className="bolinha c-ven" aria-hidden="true" />A vencer, {pctMes(f.a_vencer_mes)}%</span><b>{brl(f.a_vencer_mes)}</b>{f.titulos_a_vencer_mes != null && <small>{inteiro(f.titulos_a_vencer_mes)} títulos em aberto</small>}</div>
+                  </div>
+                </section>
+                <section className="cartao omie-fxr" aria-labelledby="t-fxr">
+                  <h2 id="t-fxr">Faturado e recebido em {mes}</h2>
+                  <p className="sub">recebimentos de qualquer vencimento que entraram no mês</p>
+                  <div className="omie-fxr-linhas">
+                    <div><div className="topo-l"><span>Faturado de honorários</span><b>{brl(f.faturado_mes)}</b></div><div className="trilha"><i className="c-fat" style={{ width: '100%' }} /></div>{f.titulos_faturado_mes != null && <small>{inteiro(f.titulos_faturado_mes)} títulos, pagos e em aberto</small>}</div>
+                    <div><div className="topo-l"><span>Entrou no caixa</span><b>{brl(f.recebido_no_mes)}</b></div><div className="trilha"><i className="c-rec" style={{ width: `${Math.min(100, n(f.faturado_mes) ? (n(f.recebido_no_mes) / n(f.faturado_mes)) * 100 : 0)}%` }} /></div>{f.titulos_recebidos_no_mes != null && <small>{inteiro(f.titulos_recebidos_no_mes)} recebimentos</small>}</div>
+                  </div>
+                  {n(f.faturado_mes) > 0 && <p className="omie-fxr-pct"><b>{Math.round((n(f.recebido_no_mes) / n(f.faturado_mes)) * 100)}%</b>do faturado do mês já entrou no caixa (somando recebimentos de qualquer vencimento)</p>}
+                </section>
+              </div>
+            </>
+          )}
+
+          <div className="omie-secao"><h2>Maiores atrasos entre os cobrados</h2><span>do relatório de {dataCurta(dados.dia)}, títulos em atraso de todas as categorias</span></div>
+          <section className="cartao omie-ranking-cartao" aria-label="Maiores atrasos entre os cobrados">
+            {atrasos.length === 0 ? <Vazio icone="ti-circle-check" titulo="Nenhum atraso entre os cobrados" texto="O último relatório não registrou título em atraso para quem foi cobrado." /> : (
+              <>
+                <ol className="omie-ranking">
+                  {atrasos.slice(0, todos ? atrasos.length : 8).map((c, i) => (
+                    <li key={c.contato_id}>
+                      <button type="button" onClick={() => abrirConversa(c.contato_id, dados.dia)}>
+                        <span className="pos" aria-hidden="true">{i + 1}</span>
+                        <span className={`avatar sit-${c.situacao || 'so_boleto'}`} aria-hidden="true">{iniciais(c.nome) || <i className="ti ti-user" />}</span>
+                        <span className="quem">
+                          <b>{c.nome}<span className="so-leitor">, abrir a conversa</span></b>
+                          {(c.empresas || []).length > 0 && <span className="emp">{c.empresas.slice(0, 2).join(', ')}{c.empresas.length > 2 ? ` e mais ${c.empresas.length - 2}` : ''}</span>}
+                          {c.situacao && <span className={`etiqueta-sit sit-${c.situacao}`}><span className={`bolinha s-${c.situacao}`} aria-hidden="true" />{NOME_SITUACAO[c.situacao] || c.situacao}</span>}
+                        </span>
+                        <span className="barra-c" aria-hidden="true"><i style={{ width: `${(n(c.atraso_valor) / maxAtraso) * 100}%` }} /></span>
+                        <span className="val"><b>{brl(c.atraso_valor)}</b><small>{inteiro(c.atraso_qtd)} {c.atraso_qtd === 1 ? 'título' : 'títulos'}</small></span>
+                        <i className="ti ti-chevron-right ir" aria-hidden="true" />
+                      </button>
+                    </li>
+                  ))}
+                </ol>
+                {atrasos.length > 8 && (
+                  <button type="button" className="omie-ver-todos" onClick={() => setTodos(!todos)} aria-expanded={todos}>{todos ? 'Mostrar só os 8 maiores' : `Ver os ${atrasos.length} maiores`}</button>
+                )}
+              </>
+            )}
+          </section>
+
+          {f.inicio_mes && dias.length > 0 && (
+            <>
+              <div className="omie-secao"><h2>Inadimplência de {mes}, dia a dia</h2><span>títulos que venceram no mês e seguem em aberto, no relatório das 17h30 de cada dia</span></div>
+              <section className="cartao" aria-label={`Inadimplência de ${mes} por dia`}>
+                <div className="omie-inad-topo">
+                  <div><span className="rot">{rotuloDia.charAt(0).toUpperCase() + rotuloDia.slice(1)}</span><b><Dinheiro valor={f.inadimplencia_mes} /></b>{f.titulos_inadimplentes_mes != null && <small>{inteiro(f.titulos_inadimplentes_mes)} títulos vencidos em aberto</small>}</div>
+                  {deltaMes != null && deltaMes !== 0 && (
+                    <p className={`omie-delta ${deltaMes > 0 ? 'sobe' : 'cai'}`}><b>{deltaMes > 0 ? '↑' : '↓'} {comReal(mil(Math.abs(deltaMes)))}</b>{deltaMes > 0 ? 'a mais' : 'a menos'} que no relatório de {dataCurta(anterior.dia)}</p>
+                  )}
+                </div>
+                <div className="omie-dias" role="img" aria-label={dias.filter((d) => d in porDia).map((d) => `${dataCurta(d)}: ${brl(porDia[d])}`).join('; ')}>
+                  {dias.map((d) => {
+                    const futuro = d > diaCalc;
+                    const temDado = d in porDia;
+                    return (
+                      <div key={d} className={`omie-dia${futuro ? ' futuro' : ''}${d === diaCalc ? ' atual' : ''}${!futuro && !temDado ? ' sem' : ''}`}>
+                        <em>{temDado ? mil(porDia[d]) : ''}</em>
+                        <i style={temDado ? { height: `${(porDia[d] / maxDia) * 85}%` } : undefined} />
+                        <small>{d === diaCalc ? rotuloDia : d.slice(8, 10)}</small>
+                      </div>
+                    );
+                  })}
+                </div>
+                {dias.some((d) => d < diaCalc && !(d in porDia)) && <p className="mini omie-sem-nota">Dia sem barra: não há relatório das 17h30 gravado naquele dia.</p>}
+              </section>
+            </>
+          )}
+
+          <p className="mini omie-fonte">Fonte: Omie, relatórios Faturado X Recebido e Contas a Receber, Inadimplência (Honorários). Só consulta: nada é alterado no Omie.</p>
         </>
       )}
     </Estado>
