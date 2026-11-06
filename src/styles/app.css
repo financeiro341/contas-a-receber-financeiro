@@ -698,8 +698,8 @@ button.wa-icone:hover { background: var(--wa-hover); color: var(--wa-texto); }
 .caixa .wa-busca input::placeholder { color: var(--wa-apagado); }
 .caixa .wa-busca input:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: -3px; }
 .caixa .wa-busca .ti { color: var(--wa-apagado); }
-.wa-chips { position: relative; display: flex; gap: 8px; padding: 4px 12px 10px; overflow-x: auto; scrollbar-width: none; }
-.wa-chips::-webkit-scrollbar { display: none; }
+/* Os filtros quebram linha em vez de rolar de lado: sem barra de rolagem, os do fim ficavam inalcançáveis com o mouse (06/11/2026). */
+.wa-chips { position: relative; display: flex; flex-wrap: wrap; gap: 8px; padding: 4px 12px 10px; }
 .wa-chip { flex: none; border: 0; background: var(--wa-barra); color: var(--wa-texto-2); border-radius: 18px; padding: 6px 12px; min-height: 34px; font-size: 13.5px; font-weight: 500; display: inline-flex; gap: 6px; align-items: center; white-space: nowrap; cursor: pointer; }
 .wa-chip:hover { background: var(--wa-sel); }
 .wa-chip[aria-pressed="true"] { background: var(--wa-chip); color: var(--wa-chip-texto); }
