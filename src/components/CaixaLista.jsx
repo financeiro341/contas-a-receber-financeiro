@@ -5,7 +5,6 @@ import { rotuloRetorno } from './AcoesConversa.jsx';
 
 const FILTROS = [
   { id: 'todas', nome: 'Todas', dica: 'Todas as conversas do grupo escolhido' },
-  { id: 'esperando', nome: 'Esperando', dica: 'A última mensagem é do cliente e a conversa não foi resolvida' },
   { id: 'sem_ler', nome: 'Não lidas', dica: 'Mensagem do cliente que ninguém abriu' },
   { id: 'retornos', nome: 'Retornos', dica: 'Retorno marcado para hoje ou atrasado' },
   { id: 'minhas', nome: 'Minhas', dica: 'Conversas em que você é o dono' },
@@ -18,7 +17,8 @@ const GRUPOS = [
 const semAcento = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
 function lerFiltros() {
-  try { return { filtro: 'todas', grupo: 'cliente', etiqueta: '', ...JSON.parse(localStorage.getItem('cr:caixa') || '{}') }; } catch { return { filtro: 'todas', grupo: 'cliente', etiqueta: '' }; }
+  // O filtro "Esperando" saiu da lista (pedido do Marcus, 06/11/2026): quem tinha ele guardado volta para Todas.
+  try { const f = { filtro: 'todas', grupo: 'cliente', etiqueta: '', ...JSON.parse(localStorage.getItem('cr:caixa') || '{}') }; return f.filtro === 'esperando' ? { ...f, filtro: 'todas' } : f; } catch { return { filtro: 'todas', grupo: 'cliente', etiqueta: '' }; }
 }
 
 // Círculo com as iniciais, numa de seis cores fixas por contato (como no WhatsApp). Número de telefone mostra o ícone de pessoa.
@@ -54,8 +54,7 @@ export default function CaixaLista({ itens, carregando, erro, recarregar, aberto
 
   const doGrupo = useMemo(() => itens.filter((c) => f.grupo === 'todos' || c.situacao === f.grupo), [itens, f.grupo]);
   const h = hoje();
-  const passa = (c, filtro) => (filtro === 'esperando' ? !c.ultima_de_nos && !c.resolvida
-    : filtro === 'sem_ler' ? c.sem_ler > 0
+  const passa = (c, filtro) => (filtro === 'sem_ler' ? c.sem_ler > 0
       : filtro === 'retornos' ? !!c.retorno && c.retorno.dia <= h
       : filtro === 'minhas' ? c.dono?.id === eu?.id
         : true);

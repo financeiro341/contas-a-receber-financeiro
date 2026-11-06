@@ -125,14 +125,14 @@ export default function AcoesConversa({ contato, resolvida, aoMudar, aoAvisar })
     setOcupado(true);
     try {
       await resolverConversa(contato, !resolvida);
-      aoAvisar(resolvida ? 'Conversa reaberta.' : 'Conversa resolvida. Volta para Esperando se o cliente escrever de novo.');
+      aoAvisar(resolvida ? 'Conversa reaberta.' : 'Conversa resolvida. Volta a ficar em aberto se o cliente escrever de novo.');
       aoMudar();
     } catch (e) { aoAvisar(e.message, true); } finally { setOcupado(false); }
   }
   return (
     <>
       <button type="button" className="botao acao-topo" aria-pressed={!!resolvida} aria-label="Conversa resolvida" disabled={ocupado} onClick={alternarResolvida}
-        title={resolvida ? 'Reabrir a conversa' : 'Marcar como resolvida: sai de Esperando até o cliente escrever de novo'}>
+        title={resolvida ? 'Reabrir a conversa' : 'Marcar como resolvida: fica fechada até o cliente escrever de novo'}>
         <i className="ti ti-circle-check" aria-hidden="true" />
         <span className="rotulo-acao">{resolvida ? 'Resolvida' : 'Resolver'}</span>
       </button>

@@ -370,7 +370,7 @@ export default function CaixaConversa({ contato, eu, etiquetas, equipe, aoVoltar
                 <button type="button" className="botao" disabled={baixando} onClick={() => concluirRetorno(r.id)}><i className="ti ti-check" aria-hidden="true" />Feito</button>
               </div>
             ))}
-            {resolvida && !confirmacao && <div className="faixa-resolvida"><i className="ti ti-circle-check" aria-hidden="true" />Resolvida por {d.resolucao.por.split(' ')[0]} · volta para Esperando se o cliente escrever.</div>}
+            {resolvida && !confirmacao && <div className="faixa-resolvida"><i className="ti ti-circle-check" aria-hidden="true" />Resolvida por {d.resolucao.por.split(' ')[0]} · volta a ficar em aberto se o cliente escrever.</div>}
           </div>
         )}
         <div className="conversa-corpo" ref={corpo} onScroll={aoRolar}>
