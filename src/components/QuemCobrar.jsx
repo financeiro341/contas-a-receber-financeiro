@@ -85,12 +85,13 @@ export default function QuemCobrar({ abrirNaCaixa }) {
             </div>
           </>
         )}
-        {estado === 'lendo' && <span className="qc-lendo" role="status"><i className="ti ti-loader-2 girando" aria-hidden="true" /> Consultando o Omie, pode levar até 1 minuto</span>}
+        <span className="so-leitor" role="status">{estado === 'lendo' ? 'Consultando o Omie, pode levar até 1 minuto' : ''}</span>
+        {estado === 'lendo' && <span className="qc-lendo" aria-hidden="true"><i className="ti ti-loader-2 girando" /> Consultando o Omie, pode levar até 1 minuto</span>}
         <div className="qc-acoes">
           {!estado && <button type="button" className="botao principal" onClick={() => carregar(false)}><i className="ti ti-list-search" aria-hidden="true" />Montar a lista</button>}
           {d && (
             <button type="button" className="botao icone" onClick={alternar} aria-expanded={!recolhida} aria-controls="quem-cobrar-corpo"
-              aria-label={recolhida ? 'Mostrar a lista Quem cobrar hoje' : 'Recolher a lista Quem cobrar hoje'} title={recolhida ? 'Mostrar a lista' : 'Recolher a lista'}>
+              aria-label="Lista Quem cobrar hoje" title={recolhida ? 'Mostrar a lista' : 'Recolher a lista'}>
               <i className="ti ti-chevron-down" aria-hidden="true" />
             </button>
           )}

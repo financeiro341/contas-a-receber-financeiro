@@ -22,7 +22,7 @@ export function Kpi({ icone, rotulo, valor, apoio, dinheiro, tom, aoClicar, ativ
   );
 }
 
-// Iniciais para o círculo do cliente ou da pessoa ("Padaria Bom Grão" → "PB"). Número de telefone não tem iniciais.
+// Iniciais para o círculo do cliente ou da pessoa ("Padaria Bom Grão" → "PG"; palavras de até 2 letras ficam de fora). Número de telefone não tem iniciais.
 export function iniciais(nome) {
   const partes = String(nome || '').trim().split(/\s+/).filter((p) => /^\p{L}/u.test(p));
   const longas = partes.filter((p) => p.length > 2);
@@ -35,10 +35,10 @@ export function AbasSituacao({ porSituacao, total, filtro, aoFiltrar }) {
   const partes = SITUACOES.filter((s) => (porSituacao?.[s.id] || 0) > 0);
   return (
     <div className="abas-situacao" role="group" aria-label="Filtrar por situação">
-      <button type="button" aria-pressed={!filtro} onClick={() => aoFiltrar(null)}>Todas <span className="n">{total}</span></button>
+      <button type="button" aria-pressed={!filtro} onClick={() => aoFiltrar(null)}>Todas <span className="n">{total}<span className="so-leitor"> {total === 1 ? 'cliente' : 'clientes'}</span></span></button>
       {partes.map((s) => (
         <button key={s.id} type="button" aria-pressed={filtro === s.id} onClick={() => aoFiltrar(filtro === s.id ? null : s.id)}>
-          <span className={`bolinha s-${s.id}`} aria-hidden="true" />{s.plural} <span className="n">{porSituacao[s.id]}</span>
+          <span className={`bolinha s-${s.id}`} aria-hidden="true" />{s.plural} <span className="n">{porSituacao[s.id]}<span className="so-leitor"> {porSituacao[s.id] === 1 ? 'cliente' : 'clientes'}</span></span>
         </button>
       ))}
     </div>

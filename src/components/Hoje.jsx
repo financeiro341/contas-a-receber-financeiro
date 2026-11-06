@@ -88,7 +88,7 @@ export default function Hoje({ dia, ehHoje, nome, abrirConversa, abrirNaCaixa })
           <section className="grade g-kpi" aria-label="Resumo do dia">
             <Kpi icone="ti-send" rotulo={plural(r.cobrados, 'Cliente cobrado', 'Clientes cobrados')} valor={inteiro(r.cobrados)} apoio={`${inteiro(r.boletos_enviados)} ${plural(r.boletos_enviados, 'boleto enviado', 'boletos enviados')}`} aoClicar={() => filtrarPor(null)} ativo={false} />
             <Kpi icone="ti-message-check" rotulo="Responderam" valor={inteiro(r.responderam)} apoio={`${pct(r.responderam, r.cobrados)} dos cobrados`} barra={proporcao(r.responderam)} corBarra="--sit-prometeu" aoClicar={() => filtrarPor('g:responderam')} ativo={filtro === 'g:responderam'} />
-            <Kpi icone="ti-message-off" tom={r.sem_resposta ? 'perigo' : undefined} rotulo="Sem resposta" valor={inteiro(r.sem_resposta)} apoio={`${pct(r.sem_resposta, r.cobrados)} ainda sem retorno`} barra={proporcao(r.sem_resposta)} corBarra="--sit-sem" aoClicar={() => filtrarPor('g:sem_resposta')} ativo={filtro === 'g:sem_resposta'} />
+            <Kpi icone="ti-message-off" tom={r.sem_resposta ? 'perigo' : undefined} rotulo="Sem resposta" valor={inteiro(r.sem_resposta)} apoio={`${pct(r.sem_resposta, r.cobrados)} dos cobrados, só boleto ou sem retorno`} barra={proporcao(r.sem_resposta)} corBarra="--sit-sem" aoClicar={() => filtrarPor('g:sem_resposta')} ativo={filtro === 'g:sem_resposta'} />
             <Kpi icone="ti-cash" rotulo="Pagou ou prometeu" valor={inteiro(pp)} apoio={`${inteiro((ps.pagou || 0) + (ps.pagou_parcial || 0))} com pagamento`} barra={proporcao(pp)} corBarra="--sit-pagou" aoClicar={() => filtrarPor('g:pagou_prometeu')} ativo={filtro === 'g:pagou_prometeu'} />
             <Kpi icone="ti-phone" rotulo="Ligações" valor={inteiro(lig.total)} apoio={`${inteiro(lig.atendidas)} ${plural(lig.atendidas, 'atendida', 'atendidas')}, ${inteiro(lig.feitas)} ${plural(lig.feitas, 'feita', 'feitas')} por nós e ${inteiro((lig.total || 0) - (lig.feitas || 0))} ${plural((lig.total || 0) - (lig.feitas || 0), 'recebida', 'recebidas')}`} aoClicar={() => filtrarPor('g:ligacoes')} ativo={filtro === 'g:ligacoes'} />
             {r.atraso_total == null
@@ -146,7 +146,7 @@ export default function Hoje({ dia, ehHoje, nome, abrirConversa, abrirNaCaixa })
                     {lista.map((c) => (
                       <tr key={c.contato_id} className="clicavel" onClick={() => abrirConversa(c.contato_id)}>
                         <td>
-                          <div className="cliente">
+                          <div className="cliente-celula">
                             <span className={`avatar sit-${c.situacao}`} aria-hidden="true">{iniciais(c.nome) || <i className="ti ti-user" />}</span>
                             <div className="cliente-texto">
                               <button type="button" className="linha-botao" onClick={(e) => { e.stopPropagation(); abrirConversa(c.contato_id); }}>

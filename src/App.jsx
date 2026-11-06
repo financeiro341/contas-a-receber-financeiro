@@ -154,7 +154,7 @@ export default function App() {
           <div className="usuario">
             {usaDia && <SeletorDia dia={dia} setDia={setDia} />}
             <button className="botao-topo icone" type="button" onClick={alternarTema} aria-label="Alternar tema claro ou escuro" title="Tema claro ou escuro"><i className="ti ti-moon" aria-hidden="true" /></button>
-            {eu && <span className="pessoa" title={eu.nome}><span className="avatar-topo" aria-hidden="true">{iniciais(eu.nome)}</span><span className="nome-usuario">{eu.nome}</span></span>}
+            {eu && <span className="pessoa" title={eu.nome} aria-label={eu.nome} role="img"><span className="avatar-topo" aria-hidden="true">{iniciais(eu.nome)}</span><span className="nome-usuario">{eu.nome}</span></span>}
             <button className="botao-topo icone" type="button" onClick={() => sair()} aria-label="Sair" title="Sair"><i className="ti ti-logout" aria-hidden="true" /></button>
           </div>
         </div>
