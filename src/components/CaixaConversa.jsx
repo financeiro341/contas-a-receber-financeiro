@@ -23,10 +23,10 @@ function TextoWhats({ texto }) {
 }
 
 function Leitura({ status }) {
-  if (status === 'READ' || status === 'PLAYED') return <i className="ti ti-checks lida" aria-label="lida" title="Lida" />;
-  if (status === 'DELIVERY_ACK') return <i className="ti ti-checks" aria-label="entregue" title="Entregue" />;
-  if (status === 'ERROR') return <i className="ti ti-alert-circle erro" aria-label="não entregue" title="Não entregue" />;
-  return <i className="ti ti-check" aria-label="enviada" title="Enviada" />;
+  if (status === 'READ' || status === 'PLAYED') return <i className="ti ti-checks lida" role="img" aria-label="lida" title="Lida" />;
+  if (status === 'DELIVERY_ACK') return <i className="ti ti-checks" role="img" aria-label="entregue" title="Entregue" />;
+  if (status === 'ERROR') return <i className="ti ti-alert-circle erro" role="img" aria-label="não entregue" title="Não entregue" />;
+  return <i className="ti ti-check" role="img" aria-label="enviada" title="Enviada" />;
 }
 
 // Botão "+" do compositor, como o clipe do WhatsApp: documento, segunda via do boleto e respostas prontas.
@@ -40,6 +40,7 @@ function MenuAnexar({ desligado, omie, aoDocumento, aoSegundaVia, aoRespostas })
     const fora = (e) => { if (!caixa.current?.contains(e.target) && !botao.current?.contains(e.target)) setAberto(false); };
     const tecla = (e) => {
       if (e.key === 'Escape') { e.stopPropagation(); setAberto(false); botao.current?.focus(); return; }
+      if (e.key === 'Tab') { setAberto(false); return; }
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         e.preventDefault();
         const itens = [...(caixa.current?.querySelectorAll('button') || [])];
@@ -51,7 +52,8 @@ function MenuAnexar({ desligado, omie, aoDocumento, aoSegundaVia, aoRespostas })
     document.addEventListener('keydown', tecla, true);
     return () => { document.removeEventListener('mousedown', fora); document.removeEventListener('keydown', tecla, true); };
   }, [aberto]);
-  const escolher = (fn) => { setAberto(false); fn(); };
+  // O foco volta ao + (o painel de respostas prontas puxa o foco para a busca dele logo depois).
+  const escolher = (fn) => { setAberto(false); botao.current?.focus(); fn(); };
   return (
     <>
       <button type="button" ref={botao} className="botao icone botao-mais" onClick={() => setAberto(!aberto)} aria-haspopup="menu" aria-expanded={aberto}
@@ -405,6 +407,7 @@ export default function CaixaConversa({ contato, eu, etiquetas, equipe, aoVoltar
                         {!m.texto && !m.arquivo && !TIPOS_MIDIA.has(m.tipo) && <em className="sem-texto">{m.tipo === 'audioMessage' ? 'Áudio' : m.tipo === 'imageMessage' ? 'Imagem' : m.tipo === 'videoMessage' ? 'Vídeo' : m.tipo === 'stickerMessage' ? 'Figurinha' : 'Mensagem sem texto'}</em>}
                         <span className="hora" title={m.nos ? (m.por ? `Enviada por ${m.por}, pelo sistema` : 'Enviada pelo WhatsApp do financeiro') : 'Mensagem do cliente'}>
                           <span className="so-leitor">{m.nos ? (m.por ? `${m.por}, pelo sistema, ` : 'Nós, ') : 'Cliente, '}</span>
+                          {m.nos && m.por && !String(m.texto || '').startsWith('*') && <span className="autor" aria-hidden="true">{String(m.por).split(' ')[0]} · </span>}
                           {horaDe(m.em)}
                           {m.nos && <> <Leitura status={m.status} /></>}
                         </span>

@@ -87,10 +87,10 @@
   /* Aba Conversas no molde do WhatsApp Web (visual aprovado pelo Marcus, 06/11/2026). O verde é o do WhatsApp;
      o texto e o fundo de cada par passam 4,5:1. A parede é um desenho próprio (recibo, moeda e cifrão), bem apagado. */
   --wa-painel: #FFFFFF; --wa-barra: #F0F2F5; --wa-hover: #F5F6F6; --wa-sel: #F0F2F5; --wa-linha: #E9EDEF;
-  --wa-texto: #111B21; --wa-texto-2: #3B4A54; --wa-apagado: #667781;
+  --wa-texto: #111B21; --wa-texto-2: #3B4A54; --wa-apagado: #54656F; --wa-hora: #54656F; --wa-verde-texto: #006B58;
   --wa-verde: #008069; --wa-verde-foco: #00A884; --wa-sobre-verde: #FFFFFF; --wa-chip: #E7FCE3; --wa-chip-texto: #027A5B;
   --wa-fundo: #EFEAE2; --wa-nossa: #D9FDD3; --wa-dele: #FFFFFF; --wa-sombra-bolha: 0 1px 0.5px rgba(11,20,26,.13);
-  --wa-sistema: #FFEECD; --wa-sistema-texto: #54656F; --wa-lida: #53BDEB;
+  --wa-sistema: #FFEECD; --wa-sistema-texto: #54656F; --wa-lida: #1479B0;
   --wa-parede: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cg fill='none' stroke='%23000' stroke-opacity='.045' stroke-width='1.4' stroke-linecap='round'%3E%3Ccircle cx='18' cy='20' r='7'/%3E%3Cpath d='M15 20h6M18 17v6'/%3E%3Crect x='70' y='12' width='16' height='20' rx='2'/%3E%3Cpath d='M74 18h8M74 22h8M74 26h5'/%3E%3Cpath d='M30 78l8-8 8 8-8 8z'/%3E%3Ccircle cx='92' cy='84' r='5'/%3E%3Cpath d='M100 60c4 0 6 3 6 6M8 104c3-3 7-3 10 0'/%3E%3C/g%3E%3C/svg%3E");
   /* Transições */
   --transition-fast: 150ms ease-out; --transition-normal: 200ms ease-out;
@@ -151,7 +151,7 @@
   --saida-text: #D8825A;
   --shadow-sm: 0 1px 2px rgba(0,0,0,0.3); --shadow-md: 0 2px 4px rgba(0,0,0,0.3), 0 10px 24px rgba(0,0,0,0.35); --shadow-lg: 0 12px 36px rgba(0,0,0,0.6);
   --wa-painel: #111B21; --wa-barra: #202C33; --wa-hover: #202C33; --wa-sel: #2A3942; --wa-linha: #222D34;
-  --wa-texto: #E9EDEF; --wa-texto-2: #C3CBD0; --wa-apagado: #8696A0;
+  --wa-texto: #E9EDEF; --wa-texto-2: #C3CBD0; --wa-apagado: #9AA8B0; --wa-hora: #C3CBD0; --wa-verde-texto: #00A884;
   --wa-verde: #00A884; --wa-verde-foco: #00A884; --wa-sobre-verde: #0B141A; --wa-chip: #0A332C; --wa-chip-texto: #7AE3C3;
   --wa-fundo: #0B141A; --wa-nossa: #005C4B; --wa-dele: #202C33; --wa-sombra-bolha: 0 1px 0.5px rgba(0,0,0,.4);
   --wa-sistema: #182229; --wa-sistema-texto: #FFD279; --wa-lida: #53BDEB;

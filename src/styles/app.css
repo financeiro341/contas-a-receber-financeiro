@@ -687,7 +687,7 @@ main.main-caixa { max-width: none; padding: 0; }
 .caixa .mini { color: var(--wa-apagado); }
 .caixa-lista { border-right: 1px solid var(--wa-linha); background: var(--wa-painel); }
 .caixa-ferramentas { padding: 0; gap: 0; border-bottom: 0; }
-.lista-cabeca { display: flex; align-items: center; gap: 8px; padding: 12px 12px 6px 20px; }
+.lista-cabeca { position: relative; display: flex; align-items: center; gap: 8px; padding: 12px 12px 6px 20px; }
 .lista-cabeca h2 { flex: 1; font-size: 21px; font-weight: 700; letter-spacing: -0.02em; color: var(--wa-texto); }
 .wa-seletor { border: 0; background: var(--wa-barra); color: var(--wa-texto-2); border-radius: 18px; padding: 6px 10px; min-height: 34px; font-size: 13px; font-weight: 500; }
 .wa-icone { width: 40px; height: 40px; border-radius: 50%; border: 0; background: none; color: var(--wa-apagado); display: inline-grid; place-items: center; flex: none; }
@@ -696,9 +696,9 @@ button.wa-icone:hover { background: var(--wa-hover); color: var(--wa-texto); }
 .caixa .wa-busca { margin: 4px 12px 8px; min-width: 0; flex: none; }
 .caixa .wa-busca input { border: 0; background: var(--wa-barra); border-radius: 10px; min-height: 38px; color: var(--wa-texto); }
 .caixa .wa-busca input::placeholder { color: var(--wa-apagado); }
-.caixa .wa-busca input:focus-visible { outline: 2px solid var(--wa-verde-foco); outline-offset: -2px; }
+.caixa .wa-busca input:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: -3px; }
 .caixa .wa-busca .ti { color: var(--wa-apagado); }
-.wa-chips { display: flex; gap: 8px; padding: 0 12px 10px; overflow-x: auto; scrollbar-width: none; }
+.wa-chips { position: relative; display: flex; gap: 8px; padding: 4px 12px 10px; overflow-x: auto; scrollbar-width: none; }
 .wa-chips::-webkit-scrollbar { display: none; }
 .wa-chip { flex: none; border: 0; background: var(--wa-barra); color: var(--wa-texto-2); border-radius: 18px; padding: 6px 12px; min-height: 34px; font-size: 13.5px; font-weight: 500; display: inline-flex; gap: 6px; align-items: center; white-space: nowrap; cursor: pointer; }
 .wa-chip:hover { background: var(--wa-sel); }
@@ -709,12 +709,12 @@ select.wa-chip { appearance: none; padding-right: 28px; background-image: linear
 .caixa-itens { border-top: 1px solid var(--wa-linha); }
 .caixa-item { gap: 14px; padding: 0 0 0 14px; border: 0; color: var(--wa-texto); }
 .caixa-item:hover { background: var(--wa-hover); }
-.caixa-item[aria-current="true"] { background: var(--wa-sel); border-left-color: transparent; }
+.caixa-item[aria-current="true"] { background: var(--wa-sel); border-left-color: var(--wa-verde); }
 .caixa-item .avatar { width: 49px; height: 49px; font-size: 16px; font-weight: 600; margin-block: 10px; }
 .caixa-item .meio { padding: 11px 14px 11px 0; border-bottom: 1px solid var(--wa-linha); gap: 2px; }
 .caixa-item .quem { font-size: 16px; font-weight: 400; color: var(--wa-texto); }
 .caixa-item .hora { color: var(--wa-apagado); }
-.caixa-item .hora.forte { color: var(--wa-verde); font-weight: 600; }
+.caixa-item .hora.forte { color: var(--wa-verde-texto); font-weight: 600; }
 .caixa-item .previa { font-size: 14px; color: var(--wa-apagado); }
 .caixa-item .previa .ti { color: var(--wa-apagado); margin-right: 2px; }
 .caixa-item .contador { background: var(--wa-verde); color: var(--wa-sobre-verde); min-width: 20px; height: 20px; font-size: 12px; font-weight: 600; }
@@ -773,7 +773,8 @@ select.wa-chip { appearance: none; padding-right: 28px; background-image: linear
 .caixa .balao.cauda::before { content: ""; position: absolute; top: 0; width: 8px; height: 13px; }
 .caixa .balao.cliente.cauda::before { left: -8px; background: var(--wa-dele); clip-path: polygon(100% 0, 0 0, 100% 100%); }
 .caixa .balao.nos.cauda::before { right: -8px; background: var(--wa-nossa); clip-path: polygon(0 0, 100% 0, 0 100%); }
-.caixa .balao .hora { display: inline-flex; float: right; gap: 3px; align-items: center; margin: 6px 0 -4px 12px; position: relative; top: 4px; font-size: 11px; color: var(--wa-apagado); white-space: nowrap; }
+.caixa .balao .hora { display: inline-flex; float: right; gap: 3px; align-items: center; margin: 6px 0 -4px 12px; position: relative; top: 4px; font-size: 11px; color: var(--wa-hora); white-space: nowrap; }
+.caixa .balao .hora .autor { font-weight: 600; }
 .caixa .balao .hora .ti { font-size: 16px; }
 .caixa .balao .hora .lida { color: var(--wa-lida); }
 .caixa .balao .arquivo { display: flex; gap: 10px; align-items: center; background: rgba(0,0,0,.05); border-radius: 6px; padding: 10px; margin-bottom: 4px; font-weight: 500; color: var(--wa-texto); overflow-wrap: anywhere; }
@@ -784,7 +785,7 @@ select.wa-chip { appearance: none; padding-right: 28px; background-image: linear
 .caixa .balao.falhou.cauda::before { background: var(--danger-subtle); }
 .caixa .balao.incerto { background: var(--warning-subtle); }
 .caixa .balao.incerto.cauda::before { background: var(--warning-subtle); }
-.caixa .balao.destaque { outline-color: var(--wa-verde-foco); }
+.caixa .balao.destaque { outline-color: var(--focus-ring); }
 .caixa .antigas .botao, .caixa .inicio-historico { background: var(--wa-painel); border: 0; box-shadow: var(--wa-sombra-bolha); border-radius: 18px; color: var(--wa-texto-2); }
 .caixa .inicio-historico { align-self: center; padding: 5px 12px; }
 /* Avisos da conversa (retorno, resolvida): no lugar das faixas do WhatsApp, balões de sistema no meio. */
@@ -799,7 +800,7 @@ select.wa-chip { appearance: none; padding-right: 28px; background-image: linear
 .caixa .linha-compor { gap: 6px; align-items: flex-end; }
 .caixa .linha-compor textarea { border: 0; border-radius: 10px; background: var(--wa-painel); color: var(--wa-texto); padding: 10px 12px; min-height: 42px; font-size: 15px; }
 .caixa .linha-compor textarea::placeholder { color: var(--wa-apagado); }
-.caixa .linha-compor textarea:focus-visible { outline: 2px solid var(--wa-verde-foco); outline-offset: -2px; }
+.caixa .linha-compor textarea:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: -3px; }
 .caixa .linha-compor textarea:disabled { background: var(--wa-hover); }
 .caixa .botao-enviar { width: 42px; height: 42px; min-height: 42px; padding: 0; border: 0; border-radius: 50%; justify-content: center; background: var(--wa-verde); color: var(--wa-sobre-verde); flex: none; }
 .caixa .botao-enviar:hover:not([disabled]) { background: var(--wa-verde); filter: brightness(1.08); }
@@ -811,7 +812,7 @@ select.wa-chip { appearance: none; padding-right: 28px; background-image: linear
 .menu-anexar { position: absolute; left: 12px; bottom: calc(100% + 6px); z-index: 7; min-width: 260px; display: flex; flex-direction: column; padding: 8px; background: var(--wa-painel); border-radius: 14px; box-shadow: var(--shadow-lg); }
 .menu-anexar button { display: flex; align-items: center; gap: 12px; padding: 9px 12px; border: 0; border-radius: 8px; background: none; color: var(--wa-texto); text-align: left; cursor: pointer; }
 .menu-anexar button:hover, .menu-anexar button:focus-visible { background: var(--wa-hover); }
-.menu-anexar button:focus-visible { outline: 2px solid var(--wa-verde-foco); outline-offset: -2px; }
+.menu-anexar button:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: -3px; }
 .menu-anexar small { display: block; font-size: 12px; color: var(--wa-apagado); }
 .menu-anexar .circ { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; color: #FFFFFF; flex: none; }
 .menu-anexar .circ .ti { font-size: 18px; }

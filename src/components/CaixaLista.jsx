@@ -118,7 +118,7 @@ export default function CaixaLista({ itens, carregando, erro, recarregar, aberto
                     </span>
                     <span className="linha2">
                       <span className="previa">
-                        {c.ultima_de_nos && <i className="ti ti-checks" aria-label="Nossa:" />}
+                        {c.ultima_de_nos && <i className="ti ti-checks" role="img" aria-label="Nossa:" />}
                         {c.ultima_texto || (c.ultima_tipo === 'audioMessage' ? 'Áudio' : c.ultima_tipo === 'imageMessage' ? 'Imagem' : 'Mensagem')}
                       </span>
                       {c.sem_ler > 0 && <span className="contador" aria-label={`${c.sem_ler} sem ler`}>{c.sem_ler}</span>}
