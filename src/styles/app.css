@@ -1007,3 +1007,6 @@ select.wa-chip { appearance: none; padding-right: 28px; background-image: linear
   .omie-dias { overflow-x: auto; grid-auto-columns: 34px; }
   .omie-acoes { width: 100%; }
 }
+
+/* "Em dia" na coluna Em atraso (06/11/2026, pedido do Marcus): cliente sem título vencido no Omie. */
+.valor-atraso .em-dia { position: relative; color: var(--sit-pagou-tx); font-weight: 600; }

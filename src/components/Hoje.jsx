@@ -181,7 +181,7 @@ export default function Hoje({ dia, ehHoje, nome, abrirConversa, abrirNaCaixa })
                         <td className="motivo">{c.motivo}</td>
                         <td className="num" data-rotulo="Última">{c.ultima || '—'}</td>
                         <td className="num" data-rotulo="Respostas"><span className={`n-resp${c.do_cliente ? '' : ' zero'}`}>{c.do_cliente ? `${c.do_cliente} ${plural(c.do_cliente, 'mensagem', 'mensagens')}` : 'Nenhuma'}</span>{c.ligacoes ? <div className="empresa"><i className="ti ti-phone" aria-hidden="true" /> {c.ligacoes} {plural(c.ligacoes, 'ligação', 'ligações')}{c.lig_atendidas ? `, ${c.lig_atendidas} atendida${c.lig_atendidas > 1 ? 's' : ''}` : ''}</div> : null}</td>
-                        <td className="num quebra valor-atraso" data-rotulo="Em atraso">{c.atraso_valor == null ? <span className="mini">sem dado</span> : Number(c.atraso_valor) > 0 ? <b>{brl(c.atraso_valor)}</b> : <span className="mini">{brl(0)}</span>}</td>
+                        <td className="num quebra valor-atraso" data-rotulo="Em atraso">{c.atraso_valor == null ? <span className="mini">sem dado</span> : Number(c.atraso_valor) > 0 ? <b>{brl(c.atraso_valor)}</b> : <span className="mini em-dia">Em dia<span className="so-leitor">, sem título vencido no Omie</span></span>}</td>
                       </tr>
                     ))}
                   </tbody>
