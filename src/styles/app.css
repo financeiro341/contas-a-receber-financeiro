@@ -565,3 +565,9 @@ html.travado body { padding-right: var(--barra, 0px); }
 
 /* Quem cobrar hoje: filtro da faixa de atraso (06/11/2026). */
 .faixa-atraso { padding: 6px 10px; border: 1px solid var(--border-campo); border-radius: var(--radius-md); background: var(--bg-subtle); color: var(--text-primary); font: inherit; font-size: 13px; }
+
+/* Números do topo clicáveis (06/11/2026): filtram a lista de clientes. */
+.kpi-botao { width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer; transition: border-color .15s, box-shadow .15s; }
+.kpi-botao:hover { border-color: var(--accent); }
+.kpi-botao:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.kpi-botao.ativo { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-subtle); }

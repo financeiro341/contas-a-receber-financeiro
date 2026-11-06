@@ -2,13 +2,22 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { SITUACOES } from '../constants.js';
 import { pct } from '../utils/formato.js';
 
-export function Kpi({ icone, rotulo, valor, apoio, dinheiro, tom }) {
-  return (
-    <div className={`cartao kpi${tom ? ` tom-${tom}` : ''}`}>
+// Número de resumo. Com aoClicar, vira botão (pedido do Marcus, 06/11/2026: clicar no número filtra a lista).
+export function Kpi({ icone, rotulo, valor, apoio, dinheiro, tom, aoClicar, ativo }) {
+  const conteudo = (
+    <>
       <div className="rotulo">{icone && <i className={`ti ${icone}`} aria-hidden="true" />}{rotulo}</div>
       <div className={`valor${dinheiro ? ' dinheiro' : ''}`}>{valor}</div>
       {apoio && <div className="apoio">{apoio}</div>}
-    </div>
+    </>
+  );
+  const classe = `cartao kpi${tom ? ` tom-${tom}` : ''}`;
+  if (!aoClicar) return <div className={classe}>{conteudo}</div>;
+  return (
+    <button type="button" className={`${classe} kpi-botao${ativo ? ' ativo' : ''}`} onClick={aoClicar} aria-pressed={!!ativo}
+      title={ativo ? 'Clique para tirar o filtro' : 'Clique para ver esses clientes na lista'}>
+      {conteudo}
+    </button>
   );
 }
 

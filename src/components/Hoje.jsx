@@ -7,6 +7,18 @@ import QuemCobrar from './QuemCobrar.jsx';
 
 const semAcento = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
+// Filtros dos números do topo (06/11/2026): o filtro pode ser uma situação (legenda) ou um destes grupos.
+const respondeu = (c) => (c.do_cliente || 0) > 0 || (c.lig_atendidas || 0) > 0;
+const GRUPOS = {
+  'g:responderam': { nome: 'Responderam', teste: respondeu },
+  'g:sem_resposta': { nome: 'Sem resposta', teste: (c) => !respondeu(c) },
+  'g:pagou_prometeu': { nome: 'Pagaram ou prometeram', teste: (c) => PAGARAM_OU_PROMETERAM.includes(c.situacao) },
+  'g:ligacoes': { nome: 'Com ligação', teste: (c) => (c.ligacoes || 0) > 0 },
+  'g:atraso': { nome: 'Com atraso no Omie', teste: (c) => Number(c.atraso_valor || 0) > 0 },
+};
+const passa = (filtro, c) => !filtro || (GRUPOS[filtro] ? GRUPOS[filtro].teste(c) : c.situacao === filtro);
+const nomeFiltro = (filtro) => GRUPOS[filtro]?.nome || NOME_SITUACAO[filtro];
+
 export default function Hoje({ dia, ehHoje, abrirConversa, abrirNaCaixa }) {
   const { dados, erro, carregando, em, recarregar } = useDados(() => lerDia(dia), [dia], ehHoje ? 120000 : 0);
   const [filtro, setFiltro] = useState(null);
@@ -19,12 +31,19 @@ export default function Hoje({ dia, ehHoje, abrirConversa, abrirNaCaixa }) {
   const lista = useMemo(() => {
     const q = semAcento(busca);
     // Ordem: pagou, prometeu, respondeu sem pagamento, não respondeu (ORDEM_SITUACAO); no mesmo grupo, a ordem do dia.
-    return (dados?.clientes || []).filter((c) => (!filtro || c.situacao === filtro)
+    return (dados?.clientes || []).filter((c) => passa(filtro, c)
       && (!q || semAcento(c.nome).includes(q) || (c.empresas || []).some((e) => semAcento(e).includes(q))))
       .map((c, i) => [c, i])
       .sort(([a, i], [b, j]) => ((ORDEM_SITUACAO[a.situacao] ?? 99) - (ORDEM_SITUACAO[b.situacao] ?? 99)) || i - j)
       .map(([c]) => c);
   }, [dados, filtro, busca]);
+
+  // Clicar num número do topo filtra a lista e leva até ela; clicar de novo tira o filtro.
+  function filtrarPor(f) {
+    const novo = f === null || filtro === f ? null : f;
+    setFiltro(novo);
+    document.getElementById('t-lista')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
 
   function exportar() {
     baixarCsv(`cobranca-${dia}.csv`, [
@@ -54,12 +73,12 @@ export default function Hoje({ dia, ehHoje, abrirConversa, abrirNaCaixa }) {
             {erro && <span className="selo regras">Falha ao reler: {erro.message}</span>}
           </div>
           <section className="grade g-kpi" aria-label="Resumo do dia">
-            <Kpi icone="ti-users" rotulo={plural(r.cobrados, 'Cliente cobrado', 'Clientes cobrados')} valor={inteiro(r.cobrados)} apoio={`${inteiro(r.boletos_enviados)} boletos enviados`} />
-            <Kpi icone="ti-message-check" rotulo="Responderam" valor={inteiro(r.responderam)} apoio={`${pct(r.responderam, r.cobrados)} dos cobrados`} />
-            <Kpi icone="ti-message-off" tom={r.sem_resposta ? "atencao" : undefined} rotulo="Sem resposta" valor={inteiro(r.sem_resposta)} apoio="Contando só boleto e sem retorno" />
-            <Kpi icone="ti-cash" tom={pp ? "bom" : undefined} rotulo="Pagaram ou prometeram" valor={inteiro(pp)} apoio={`${inteiro((ps.pagou || 0) + (ps.pagou_parcial || 0))} com pagamento`} />
-            <Kpi icone="ti-phone" rotulo="Ligações" valor={inteiro(lig.total)} apoio={`${inteiro(lig.atendidas)} atendidas · ${lig.fonte === 'sistema' ? `${inteiro(lig.registradas)} pelo sistema${lig.automaticas ? `, ${inteiro(lig.automaticas)} lidas no WhatsApp` : ''}` : lig.fonte === 'chrome' ? 'lidas no WhatsApp Web' : 'só as recebidas'}`} />
-            <Kpi icone="ti-alert-circle" rotulo="Em atraso no Omie" dinheiro valor={r.atraso_total == null ? '—' : brl(r.atraso_total)} apoio={r.atraso_total == null ? 'Entra com o relatório das 17h30' : 'Soma dos clientes cobrados'} />
+            <Kpi icone="ti-users" rotulo={plural(r.cobrados, 'Cliente cobrado', 'Clientes cobrados')} valor={inteiro(r.cobrados)} apoio={`${inteiro(r.boletos_enviados)} boletos enviados`} aoClicar={() => filtrarPor(null)} ativo={false} />
+            <Kpi icone="ti-message-check" rotulo="Responderam" valor={inteiro(r.responderam)} apoio={`${pct(r.responderam, r.cobrados)} dos cobrados`} aoClicar={() => filtrarPor('g:responderam')} ativo={filtro === 'g:responderam'} />
+            <Kpi icone="ti-message-off" tom={r.sem_resposta ? "atencao" : undefined} rotulo="Sem resposta" valor={inteiro(r.sem_resposta)} apoio="Contando só boleto e sem retorno" aoClicar={() => filtrarPor('g:sem_resposta')} ativo={filtro === 'g:sem_resposta'} />
+            <Kpi icone="ti-cash" tom={pp ? "bom" : undefined} rotulo="Pagaram ou prometeram" valor={inteiro(pp)} apoio={`${inteiro((ps.pagou || 0) + (ps.pagou_parcial || 0))} com pagamento`} aoClicar={() => filtrarPor('g:pagou_prometeu')} ativo={filtro === 'g:pagou_prometeu'} />
+            <Kpi icone="ti-phone" rotulo="Ligações" valor={inteiro(lig.total)} apoio={`${inteiro(lig.atendidas)} ${plural(lig.atendidas, 'atendida', 'atendidas')} · ${inteiro(lig.feitas)} ${plural(lig.feitas, 'feita', 'feitas')} por nós, ${inteiro((lig.total || 0) - (lig.feitas || 0))} ${plural((lig.total || 0) - (lig.feitas || 0), 'recebida', 'recebidas')}`} aoClicar={() => filtrarPor('g:ligacoes')} ativo={filtro === 'g:ligacoes'} />
+            <Kpi icone="ti-alert-circle" rotulo="Em atraso no Omie" dinheiro valor={r.atraso_total == null ? '—' : brl(r.atraso_total)} apoio={r.atraso_total == null ? 'Entra com o relatório das 17h30' : 'Soma dos clientes cobrados'} aoClicar={r.atraso_total == null ? undefined : () => filtrarPor('g:atraso')} ativo={filtro === 'g:atraso'} />
           </section>
 
           {(dados.retornos || []).length > 0 && (
@@ -95,7 +114,7 @@ export default function Hoje({ dia, ehHoje, abrirConversa, abrirNaCaixa }) {
               <h2 id="t-lista" style={{ marginRight: 'auto' }}><i className="ti ti-list" aria-hidden="true" />Clientes ({lista.length})</h2>
               {filtro && (
                 <span className="chip filtro-ativo">
-                  <span className={`bolinha s-${filtro}`} aria-hidden="true" />Filtro: {NOME_SITUACAO[filtro]}
+                  {!GRUPOS[filtro] && <span className={`bolinha s-${filtro}`} aria-hidden="true" />}Filtro: {nomeFiltro(filtro)}
                   <button type="button" className="limpar" onClick={() => setFiltro(null)} aria-label="Limpar o filtro"><i className="ti ti-x" aria-hidden="true" /></button>
                 </span>
               )}
