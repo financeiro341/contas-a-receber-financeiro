@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { aoMudarSessao, lerAtendimento, lerCaixa, lerEu, sair, sessaoAtual } from './lib/api.js';
 import { dataLonga, diaSemana, diaUtilAnterior, hoje, somarDias } from './utils/formato.js';
-import { useDados } from './components/comum.jsx';
+import { iniciais, useDados } from './components/comum.jsx';
 import leao from './assets/leao.png';
 import Login from './components/Login.jsx';
 import { alternarTema } from './utils/tema.js';
@@ -73,10 +73,12 @@ function SeletorDia({ dia, setDia }) {
   };
   return (
     <div className="seletor-dia" role="group" aria-label="Dia">
+      <div className="dia-caixa">
       <button className="botao-topo icone" type="button" onClick={() => mudar(-1)} aria-label="Dia útil anterior" disabled={dia <= INICIO_DADOS}><i className="ti ti-chevron-left" aria-hidden="true" /></button>
       <label className="so-leitor" htmlFor="dia">Escolher o dia</label>
       <input id="dia" type="date" value={dia} min={INICIO_DADOS} max={hoje()} onChange={(e) => e.target.value && setDia(e.target.value)} />
       <button className="botao-topo icone" type="button" onClick={() => mudar(1)} aria-label="Próximo dia útil" disabled={ehHoje}><i className="ti ti-chevron-right" aria-hidden="true" /></button>
+      </div>
       {ehHoje ? <span className="selo-hoje">Hoje</span> : <button className="botao-topo" type="button" onClick={() => setDia(hoje())}>Hoje</button>}
     </div>
   );
@@ -139,15 +141,7 @@ export default function App() {
     <>
       <header className="topo tema-escuro" ref={topo}>
         <div className="faixa">
-          <div className="marca"><img src={leao} alt="" /><div><b>Contas a Receber</b><small>Castelo Branco · WhatsApp do financeiro e Omie</small></div></div>
-          <div className="espaco" />
-          <div className="usuario">
-            {eu && <span className="nome-usuario">{eu.nome}</span>}
-            <button className="botao-topo icone" type="button" onClick={alternarTema} aria-label="Alternar tema claro ou escuro" title="Tema claro ou escuro"><i className="ti ti-moon" aria-hidden="true" /></button>
-            <button className="botao-topo" type="button" onClick={() => sair()}><i className="ti ti-logout" aria-hidden="true" /><span className="rotulo-sair">Sair</span></button>
-          </div>
-        </div>
-        <div className="faixa-abas">
+          <div className="marca"><img src={leao} alt="" /><div><b>Contas a Receber</b><small>Castelo Branco, financeiro</small></div></div>
           <nav className="abas" role="tablist" aria-label="Telas">
             {ABAS.map((a) => (
               <button key={a.id} role="tab" type="button" aria-selected={aba === a.id} onClick={() => setAba(a.id)}>
@@ -157,13 +151,18 @@ export default function App() {
               </button>
             ))}
           </nav>
-          {usaDia && <SeletorDia dia={dia} setDia={setDia} />}
+          <div className="usuario">
+            {usaDia && <SeletorDia dia={dia} setDia={setDia} />}
+            <button className="botao-topo icone" type="button" onClick={alternarTema} aria-label="Alternar tema claro ou escuro" title="Tema claro ou escuro"><i className="ti ti-moon" aria-hidden="true" /></button>
+            {eu && <span className="pessoa" title={eu.nome}><span className="avatar-topo" aria-hidden="true">{iniciais(eu.nome)}</span><span className="nome-usuario">{eu.nome}</span></span>}
+            <button className="botao-topo icone" type="button" onClick={() => sair()} aria-label="Sair" title="Sair"><i className="ti ti-logout" aria-hidden="true" /></button>
+          </div>
         </div>
       </header>
       <main className={aba === 'conversas' ? 'main-caixa' : undefined}>
         <h1 className="so-leitor">{abaAtual?.nome}</h1>
-        {usaDia && <p className="data-pagina">{aba === 'historico' ? `Até ${dataLonga(dia)}` : dataLonga(dia)}</p>}
-        {aba === 'hoje' && <Hoje dia={dia} ehHoje={ehHoje} abrirConversa={abrirConversa} abrirNaCaixa={abrirNaCaixa} />}
+        {usaDia && aba !== 'hoje' && <p className="data-pagina">{aba === 'historico' ? `Até ${dataLonga(dia)}` : dataLonga(dia)}</p>}
+        {aba === 'hoje' && <Hoje dia={dia} ehHoje={ehHoje} nome={eu?.nome} abrirConversa={abrirConversa} abrirNaCaixa={abrirNaCaixa} />}
         {aba === 'conversas' && <Caixa eu={eu} contatoPedido={pedidoCaixa} />}
         {aba === 'atendimento' && <Atendimento dia={dia} ehHoje={ehHoje} abrirConversa={abrirConversa} />}
         {aba === 'atendimento' && eu?.papel === 'admin' && <ExtensaoLigacoes />}

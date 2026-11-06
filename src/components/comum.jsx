@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { SITUACOES } from '../constants.js';
-import { pct } from '../utils/formato.js';
 
 // Número de resumo. Com aoClicar, vira botão (pedido do Marcus, 06/11/2026: clicar no número filtra a lista).
-export function Kpi({ icone, rotulo, valor, apoio, dinheiro, tom, aoClicar, ativo }) {
+// barra: proporção de 0 a 100 desenhada embaixo do número, na cor `corBarra` (um token).
+export function Kpi({ icone, rotulo, valor, apoio, dinheiro, tom, aoClicar, ativo, barra, corBarra }) {
   const conteudo = (
     <>
-      <div className="rotulo">{icone && <i className={`ti ${icone}`} aria-hidden="true" />}{rotulo}</div>
+      <div className="rotulo">{icone && <span className="kpi-icone"><i className={`ti ${icone}`} aria-hidden="true" /></span>}{rotulo}</div>
       <div className={`valor${dinheiro ? ' dinheiro' : ''}`}>{valor}</div>
       {apoio && <div className="apoio">{apoio}</div>}
+      {barra != null && <div className="kpi-barra" aria-hidden="true"><i style={{ width: `${Math.max(0, Math.min(100, barra))}%`, background: `var(${corBarra || '--grafico-serie'})` }} /></div>}
     </>
   );
   const classe = `cartao kpi${tom ? ` tom-${tom}` : ''}`;
@@ -21,24 +22,26 @@ export function Kpi({ icone, rotulo, valor, apoio, dinheiro, tom, aoClicar, ativ
   );
 }
 
-// Barra empilhada das situações, com legenda que também filtra a lista.
-export function PilhaSituacoes({ porSituacao, total, filtro, aoFiltrar }) {
+// Iniciais para o círculo do cliente ou da pessoa ("Padaria Bom Grão" → "PB"). Número de telefone não tem iniciais.
+export function iniciais(nome) {
+  const partes = String(nome || '').trim().split(/\s+/).filter((p) => /^\p{L}/u.test(p));
+  const longas = partes.filter((p) => p.length > 2);
+  const usar = (longas.length ? longas : partes).slice(0, 2);
+  return usar.map((p) => p[0]).join('').toUpperCase();
+}
+
+// Abas de situação acima da lista (visual novo, 06/11/2026): texto simples com a bolinha da cor e a contagem.
+export function AbasSituacao({ porSituacao, total, filtro, aoFiltrar }) {
   const partes = SITUACOES.filter((s) => (porSituacao?.[s.id] || 0) > 0);
   return (
-    <>
-      <div className="pilha" role="img" aria-label={partes.map((s) => `${s.plural}: ${porSituacao[s.id]}`).join(', ') || 'Sem clientes'}>
-        {partes.map((s) => <i key={s.id} className={`s-${s.id}`} style={{ flex: `${porSituacao[s.id]} 1 0` }} />)}
-      </div>
-      <div className="legenda" role="group" aria-label="Filtrar por situação">
-        {aoFiltrar && <button type="button" aria-pressed={!filtro} onClick={() => aoFiltrar(null)}>Todas <b>{total}</b></button>}
-        {partes.map((s) => (
-          <button key={s.id} type="button" aria-pressed={filtro === s.id} onClick={() => aoFiltrar?.(filtro === s.id ? null : s.id)}>
-            <span className={`bolinha s-${s.id}`} aria-hidden="true" />{s.plural} <b>{porSituacao[s.id]}</b>
-            <span style={{ color: 'var(--text-muted)' }}>{pct(porSituacao[s.id], total)}</span>
-          </button>
-        ))}
-      </div>
-    </>
+    <div className="abas-situacao" role="group" aria-label="Filtrar por situação">
+      <button type="button" aria-pressed={!filtro} onClick={() => aoFiltrar(null)}>Todas <span className="n">{total}</span></button>
+      {partes.map((s) => (
+        <button key={s.id} type="button" aria-pressed={filtro === s.id} onClick={() => aoFiltrar(filtro === s.id ? null : s.id)}>
+          <span className={`bolinha s-${s.id}`} aria-hidden="true" />{s.plural} <span className="n">{porSituacao[s.id]}</span>
+        </button>
+      ))}
+    </div>
   );
 }
 

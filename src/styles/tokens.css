@@ -8,7 +8,7 @@
    fundo de botão, item ativo e decoração. Pares conferidos em tokens.test.js. */
 :root {
   /* Fundos: página em creme da marca; painéis e cartões brancos */
-  --bg-base: #F3F1EB;      /* página e área do quadro */
+  --bg-base: #F3F1EC;      /* página (creme da marca; visual novo de 06/11/2026) */
   --bg-content: #EAE6DA;   /* poço das colunas do Kanban e do quadro do Meu dia */
   --bg-elevated: #FFFFFF;  /* painéis, topo, cabeçalho, tabela */
   --bg-card: #FFFFFF;      /* cartão de demanda */
@@ -20,7 +20,7 @@
      fundo ao redor (a --border-strong dá 1,67:1). Só para campos; divisórias e cartões ficam como estão. */
   --border-campo: #918A77;
   /* Texto: azul-marinho da marca nos títulos; azul-acinzentado (o do site) no corpo */
-  --text-primary: #00204D; --text-secondary: #38475C; --text-muted: #566273;
+  --text-primary: #14213A; --text-secondary: #3F4B60; --text-muted: #566273;
   --text-inverse: #00204D;   /* sobre cores vivas e pastel (avatar, perigo, chips) */
   --text-on-accent: #00204D; /* sobre o --accent (botão principal, item ativo do menu): navy sobre ouro */
   /* Acento: ouro da marca. #C89F50 no botão e no item ativo (hover #B88A45, como no site);
@@ -74,7 +74,16 @@
   /* Raios: 6–8px em cartões e botões e 12px nos painéis */
   --radius-xs: 4px; --radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px; --radius-xl: 16px; --radius-pill: 999px;
   /* Sombras: leves, em azul-marinho translúcido (a separação é por borda fina e sombra suave) */
-  --shadow-sm: 0 1px 2px rgba(0,32,77,0.06); --shadow-md: 0 4px 14px rgba(0,32,77,0.08); --shadow-lg: 0 12px 36px rgba(0,32,77,0.16);
+  --shadow-sm: 0 1px 2px rgba(20,33,58,0.05), 0 2px 8px rgba(20,33,58,0.05); --shadow-md: 0 2px 4px rgba(20,33,58,0.06), 0 10px 24px rgba(20,33,58,0.08); --shadow-lg: 0 12px 36px rgba(0,32,77,0.16);
+  /* Situações da cobrança (visual novo, 06/11/2026): cor da bolinha, fundo da etiqueta e texto da etiqueta.
+     O texto (-tx) passa 4,5:1 sobre o fundo (-bg); o nome da situação sempre vem escrito. */
+  --sit-pagou: #2F8F5B; --sit-pagou-bg: #E6F3EC; --sit-pagou-tx: #1E6B42;
+  --sit-parcial: #5FB585; --sit-parcial-bg: #E6F3EC; --sit-parcial-tx: #1E6B42;
+  --sit-disse: #3E9C8F; --sit-disse-bg: #E2F2EF; --sit-disse-tx: #1D6359;
+  --sit-prometeu: #3E7CB1; --sit-prometeu-bg: #E7F0F8; --sit-prometeu-tx: #275D8C;
+  --sit-respondeu: #C89F50; --sit-respondeu-bg: #F7EEDB; --sit-respondeu-tx: #74500F;
+  --sit-sem: #C2453B; --sit-sem-bg: #FBEAE8; --sit-sem-tx: #9B2C24;
+  --sit-boleto: #9AA3B2; --sit-boleto-bg: #EEF0F3; --sit-boleto-tx: #4F596A;
   /* Transições */
   --transition-fast: 150ms ease-out; --transition-normal: 200ms ease-out;
   /* Foco visível (teclado): azul-marinho, bem acima de 3:1 sobre os fundos claros */
@@ -98,13 +107,13 @@
    data-tema="escuro" no <html> (src/utils/tema.js). Pares conferidos em tokens.test.js. */
 :root[data-tema="escuro"] {
   color-scheme: dark;
-  --bg-base: #0B1628;      /* página */
-  --bg-content: #08111F;   /* poço das colunas do Kanban e do quadro do Meu dia */
-  --bg-elevated: #13233D;  /* painéis, topo, cabeçalho, tabela */
-  --bg-card: #172A47;      /* cartão de demanda */
-  --bg-subtle: #1A2E4C;    /* campos, trilhas, hover */
-  --bg-overlay: #1B3050;   /* modais, menus flutuantes e avisos */
-  --border: #22385A; --border-strong: #2E4870;
+  --bg-base: #0A1220;      /* página (visual novo, 06/11/2026: três tons de azul bem fundo) */
+  --bg-content: #070E1A;   /* poço */
+  --bg-elevated: #111C2F;  /* painéis, cartões, tabela */
+  --bg-card: #16223A;      /* cartão dentro de painel */
+  --bg-subtle: #16223A;    /* campos, trilhas, hover */
+  --bg-overlay: #1A2740;   /* modais, menus flutuantes e avisos */
+  --border: #1F2C44; --border-strong: #2C3C5A;
   --border-campo: #6F84A6;
   --text-primary: #EEF2F8; --text-secondary: #C3CCDB; --text-muted: #9DACC2;
   --text-inverse: #00204D; --text-on-accent: #00204D;
@@ -132,7 +141,14 @@
      faixa de luminância, impedem mais que isso sem esbranquiçar o tom 1). */
   --grafico-saida-1: #FEC0B2; --grafico-saida-2: #EA9E8E; --grafico-saida-3: #C28378; --grafico-saida-4: #CC5545;
   --saida-text: #D8825A;
-  --shadow-sm: 0 1px 2px rgba(0,0,0,0.35); --shadow-md: 0 4px 14px rgba(0,0,0,0.45); --shadow-lg: 0 12px 36px rgba(0,0,0,0.6);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.3); --shadow-md: 0 2px 4px rgba(0,0,0,0.3), 0 10px 24px rgba(0,0,0,0.35); --shadow-lg: 0 12px 36px rgba(0,0,0,0.6);
+  --sit-pagou: #5BBF86; --sit-pagou-bg: #13291F; --sit-pagou-tx: #7FD3A2;
+  --sit-parcial: #8DDCAC; --sit-parcial-bg: #13291F; --sit-parcial-tx: #A6E8C0;
+  --sit-disse: #5CC2B3; --sit-disse-bg: #112C29; --sit-disse-tx: #86D8CB;
+  --sit-prometeu: #6FA5D8; --sit-prometeu-bg: #13233A; --sit-prometeu-tx: #94BFE6;
+  --sit-respondeu: #D2AD73; --sit-respondeu-bg: #2A2314; --sit-respondeu-tx: #E3C58F;
+  --sit-sem: #E56B5F; --sit-sem-bg: #2E1716; --sit-sem-tx: #F2998F;
+  --sit-boleto: #6E7A8E; --sit-boleto-bg: #1B2638; --sit-boleto-tx: #AEB8C8;
   --focus-ring: #E8C98E;
   --backdrop: rgba(0,0,0,0.6);
 }

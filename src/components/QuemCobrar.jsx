@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { lerQuemCobrar } from '../lib/api.js';
 import { brl, dataCurta, inteiro, plural } from '../utils/formato.js';
 import { Vazio } from './comum.jsx';
+import leao from '../assets/leao.png';
 
 const semAcento = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 const hora = (iso) => new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' }).format(new Date(iso));
@@ -67,31 +68,41 @@ export default function QuemCobrar({ abrirNaCaixa }) {
   const somaFalta = useMemo(() => base.filter((x) => !x.falou_hoje).reduce((s, x) => s + Number(x.valor || 0), 0), [base]);
 
   return (
-    <section className={`cartao bloco quem-cobrar${recolhida ? ' recolhida' : ''}`} aria-labelledby="t-quem-cobrar">
-      <div className="quem-cobrar-cabeca">
-        <div>
-          <h2 id="t-quem-cobrar"><i className="ti ti-target-arrow" aria-hidden="true" />Quem cobrar hoje{recolhida && d ? ` (${inteiro(contagem.falta)} a cobrar, ${brl(somaFalta)})` : ''}</h2>
-          <div className="sub">Honorários em atraso no Omie, do maior valor para o menor: as 40 maiores dívidas (todos os anos) e as dívidas do ano (vencidas de 01/01 até hoje). "Falta cobrar" são os que ainda não receberam mensagem nossa hoje.</div>
+    <section className={`bloco quem-cobrar${recolhida ? ' recolhida' : ''}`} aria-labelledby="t-quem-cobrar">
+      <div className="qc-faixa tema-escuro">
+        <img className="qc-selo" src={leao} alt="" />
+        <div className="qc-texto">
+          <h2 id="t-quem-cobrar">Quem cobrar hoje</h2>
+          <p>As 40 maiores dívidas e quem venceu de 01/01 até hoje, do maior valor para o menor.</p>
         </div>
-        <button type="button" className="botao icone" onClick={alternar} aria-expanded={!recolhida} aria-controls="quem-cobrar-corpo"
-          aria-label={recolhida ? 'Mostrar a lista Quem cobrar hoje' : 'Recolher a lista Quem cobrar hoje'} title={recolhida ? 'Mostrar' : 'Recolher'}>
-          <i className="ti ti-chevron-down" aria-hidden="true" />
-        </button>
+        {d && (
+          <>
+            <div className="qc-num"><b>{inteiro(contagem.falta)}</b><span>{plural(contagem.falta, 'cliente a cobrar', 'clientes a cobrar')}</span></div>
+            <div className="qc-num"><b>{brl(somaFalta)}</b><span>em atraso de quem falta</span></div>
+            <div className="qc-prog">
+              <span>{inteiro(contagem.feito)} de {inteiro(contagem.todos)} já com mensagem hoje</span>
+              <div className="qc-trilha" aria-hidden="true"><i style={{ width: `${contagem.todos ? Math.round((contagem.feito / contagem.todos) * 100) : 0}%` }} /></div>
+            </div>
+          </>
+        )}
+        {estado === 'lendo' && <span className="qc-lendo" role="status"><i className="ti ti-loader-2 girando" aria-hidden="true" /> Consultando o Omie, pode levar até 1 minuto</span>}
+        <div className="qc-acoes">
+          {!estado && <button type="button" className="botao principal" onClick={() => carregar(false)}><i className="ti ti-list-search" aria-hidden="true" />Montar a lista</button>}
+          {d && (
+            <button type="button" className="botao icone" onClick={alternar} aria-expanded={!recolhida} aria-controls="quem-cobrar-corpo"
+              aria-label={recolhida ? 'Mostrar a lista Quem cobrar hoje' : 'Recolher a lista Quem cobrar hoje'} title={recolhida ? 'Mostrar a lista' : 'Recolher a lista'}>
+              <i className="ti ti-chevron-down" aria-hidden="true" />
+            </button>
+          )}
+        </div>
       </div>
 
-      <div id="quem-cobrar-corpo" hidden={recolhida}>
-      {!estado && (
-        <div className="quem-cobrar-inicio">
-          <button type="button" className="botao principal" onClick={() => carregar(false)}><i className="ti ti-list-search" aria-hidden="true" />Montar a lista</button>
-          <span className="mini">Consulta o Omie na hora (só consulta). A primeira vez do dia leva até 1 minuto.</span>
-        </div>
-      )}
-      {estado === 'lendo' && <div className="quem-cobrar-inicio" role="status"><i className="ti ti-loader-2 girando" aria-hidden="true" /> Consultando os atrasados no Omie. Pode levar até 1 minuto.</div>}
       {estado?.erro && (
-        <div className="aviso erro" role="alert"><i className="ti ti-alert-triangle" aria-hidden="true" /><span style={{ flex: 1 }}>{estado.erro}</span>
+        <div className="aviso erro qc-erro" role="alert"><i className="ti ti-alert-triangle" aria-hidden="true" /><span style={{ flex: 1 }}>{estado.erro}</span>
           <button type="button" className="botao" onClick={() => carregar(false)}>Tentar de novo</button></div>
       )}
 
+      <div id="quem-cobrar-corpo" className="cartao qc-corpo" hidden={recolhida || !d}>
       {d && (
         <>
           <div className="quem-cobrar-topo">
@@ -116,9 +127,9 @@ export default function QuemCobrar({ abrirNaCaixa }) {
             </div>
           </div>
           <p className="mini quem-cobrar-fonte">
-            <i className="ti ti-building-bank" aria-hidden="true" /> Omie às {hora(d.calculado_em)}
-            {d.status !== 'completo' && ' (o Omie não devolveu todos os títulos: a lista pode estar incompleta)'}
-            {' · '}falta cobrar {inteiro(contagem.falta)} {plural(contagem.falta, 'cliente', 'clientes')}, {brl(somaFalta)}
+            <i className="ti ti-building-bank" aria-hidden="true" /> Consultado no Omie às {hora(d.calculado_em)}
+            {d.status !== 'completo' && ' (o Omie não devolveu todos os títulos: a lista pode estar incompleta)'}.
+            {' '}"Falta cobrar" são os que ainda não receberam mensagem nossa hoje.
             <button type="button" className="link-botao" onClick={() => carregar(true)} disabled={estado.atualizando}>{estado.atualizando ? 'Atualizando…' : 'Atualizar'}</button>
           </p>
 
