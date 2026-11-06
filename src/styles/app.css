@@ -40,7 +40,44 @@ h1, h2, h3 { color: var(--text-primary); margin: 0; letter-spacing: -0.01em; }
 .topo .seletor-dia { flex: none; gap: 8px; }
 .dia-caixa { display: inline-flex; align-items: center; border: 1px solid var(--border); border-radius: var(--radius-md); background: rgba(255,255,255,0.06); min-height: 36px; }
 .dia-caixa .botao-topo { border: 0; background: none; min-height: 34px; min-width: 32px; }
-.topo .seletor-dia input { border: 0; background: transparent; color: var(--text-primary); padding: 4px 2px; min-height: 34px; font-weight: 500; color-scheme: dark; }
+/* Calendário do topo (06/11/2026, no lugar do seletor nativo do navegador): painel azul-marinho com o dia escolhido em ouro,
+   hoje com anel de ouro, fim de semana e feriado apagados (feriado com um ponto vermelho) e dias sem dado desligados. */
+.calendario { position: relative; }
+.calendario-gatilho { display: inline-flex; align-items: center; gap: 8px; border: 0; background: none; color: var(--text-primary); min-height: 34px; padding: 4px 10px; border-radius: var(--radius-sm); cursor: pointer; font-weight: 600; letter-spacing: .01em; }
+.calendario-gatilho .ti { color: var(--accent-text); font-size: 17px; }
+.calendario-semana { color: var(--text-muted); font-weight: 500; margin-right: -3px; }
+.calendario-gatilho:hover, .calendario-gatilho[aria-expanded="true"] { background: rgba(255,255,255,0.08); }
+.calendario-painel { position: absolute; top: calc(100% + 12px); left: 50%; transform: translateX(-50%); z-index: 40; width: 304px; padding: 14px 14px 12px;
+  background: var(--bg-overlay); border: 1px solid var(--border-strong); border-top: 2px solid var(--accent); border-radius: var(--radius-lg); box-shadow: 0 18px 48px rgba(0,8,24,0.55);
+  animation: calendario-entra 140ms ease-out; }
+@keyframes calendario-entra { from { opacity: 0; transform: translate(-50%, -4px); } to { opacity: 1; transform: translate(-50%, 0); } }
+.calendario-cabeca { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+.calendario-cabeca b { color: var(--text-primary); font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
+.calendario-cabeca b span { color: var(--text-muted); font-weight: 500; }
+.calendario-seta { width: 32px; height: 32px; display: inline-grid; place-items: center; border: 1px solid var(--border); background: rgba(255,255,255,0.04); color: var(--text-primary); border-radius: var(--radius-md); cursor: pointer; }
+.calendario-seta:hover:not([disabled]) { background: rgba(255,255,255,0.1); }
+.calendario-seta[disabled] { opacity: .3; cursor: default; }
+.calendario-grade { width: 100%; border-collapse: separate; border-spacing: 2px; table-layout: fixed; }
+.calendario-grade th { font-size: 11.5px; font-weight: 600; color: var(--text-secondary); padding: 2px 0 6px; text-align: center; }
+.calendario-grade th.fds { color: var(--text-muted); }
+.calendario-grade td { padding: 0; text-align: center; }
+.calendario-dia { position: relative; width: 100%; aspect-ratio: 1; max-height: 38px; border: 0; background: none; color: var(--text-primary); border-radius: 10px; cursor: pointer; font-size: 13.5px; font-weight: 500; font-feature-settings: "tnum" 1;
+  display: inline-grid; place-items: center; transition: background var(--transition-fast); }
+.calendario-dia:hover:not([disabled]):not(.escolhido) { background: rgba(255,255,255,0.1); }
+.calendario-dia.apagado { color: var(--text-muted); }
+.calendario-dia.hoje { box-shadow: inset 0 0 0 1.5px var(--accent-soft); color: var(--accent-text); font-weight: 700; }
+.calendario-dia.escolhido { background: var(--accent); color: var(--text-on-accent); font-weight: 700; box-shadow: 0 2px 8px rgba(200,159,80,0.35); }
+.calendario-dia[disabled] { opacity: .28; cursor: default; }
+.calendario-dia:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.ponto-feriado { position: absolute; bottom: 4px; left: 50%; width: 4px; height: 4px; margin-left: -2px; border-radius: 50%; background: var(--danger); }
+.calendario-dia.escolhido .ponto-feriado { background: var(--text-on-accent); }
+.calendario-pe { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+.calendario-legenda { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); }
+.amostra-hoje { width: 12px; height: 12px; border-radius: 4px; box-shadow: inset 0 0 0 1.5px var(--accent-soft); }
+.amostra-feriado { width: 5px; height: 5px; border-radius: 50%; background: var(--danger); margin-left: 8px; }
+.calendario-hoje { border: 1px solid var(--border-strong); background: none; color: var(--accent-text); border-radius: var(--radius-pill); padding: 4px 12px; min-height: 32px; font-size: 13px; font-weight: 600; cursor: pointer; }
+.calendario-hoje:hover:not([disabled]) { background: rgba(255,255,255,0.08); }
+.calendario-hoje[disabled] { opacity: .4; cursor: default; }
 .selo-hoje { border-radius: var(--radius-pill); padding: 3px 10px; font-size: 12px; font-weight: 700; background: var(--accent); color: var(--text-on-accent); }
 
 /* Página */
@@ -667,6 +704,8 @@ html.travado body { padding-right: var(--barra, 0px); }
   .abas-situacao { gap: 6px; }
 }
 @media (max-width: 560px) {
+  .calendario-painel { position: fixed; top: calc(var(--alt-topo, 104px) + 6px); width: min(320px, calc(100vw - 32px)); }
+  .calendario-dia { max-height: 40px; }
   .topo .faixa:has(.seletor-dia > .botao-topo) .marca > div { display: none; }
   .topo .abas { margin-top: 4px; }
   .topo .abas button .ti { display: inline-block; color: var(--text-muted); font-size: 18px; }

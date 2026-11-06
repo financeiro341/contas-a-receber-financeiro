@@ -12,6 +12,7 @@ import Historico, { INICIO_DADOS } from './components/Historico.jsx';
 import Omie from './components/Omie.jsx';
 import Conversa from './components/Conversa.jsx';
 import Caixa from './components/Caixa.jsx';
+import Calendario from './components/Calendario.jsx';
 
 const ABAS = [
   { id: 'hoje', nome: 'Cobrança do dia', curto: 'Cobrança', icone: 'ti-target-arrow' },
@@ -65,8 +66,7 @@ function SeletorDia({ dia, setDia }) {
     <div className="seletor-dia" role="group" aria-label="Dia">
       <div className="dia-caixa">
       <button className="botao-topo icone" type="button" onClick={() => mudar(-1)} aria-label="Dia útil anterior" disabled={dia <= INICIO_DADOS}><i className="ti ti-chevron-left" aria-hidden="true" /></button>
-      <label className="so-leitor" htmlFor="dia">Escolher o dia</label>
-      <input id="dia" type="date" value={dia} min={INICIO_DADOS} max={hoje()} onChange={(e) => e.target.value && setDia(e.target.value)} />
+      <Calendario dia={dia} min={INICIO_DADOS} max={hoje()} hoje={hoje()} aoEscolher={setDia} />
       <button className="botao-topo icone" type="button" onClick={() => mudar(1)} aria-label="Próximo dia útil" disabled={ehHoje}><i className="ti ti-chevron-right" aria-hidden="true" /></button>
       </div>
       {ehHoje ? <span className="selo-hoje">Hoje</span> : <button className="botao-topo" type="button" onClick={() => setDia(hoje())}>Hoje</button>}

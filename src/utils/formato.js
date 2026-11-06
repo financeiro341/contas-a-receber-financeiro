@@ -73,3 +73,11 @@ export function tamanhoArquivo(bytes) {
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1).replace('.', ',')} MB`;
 }
+
+// Feriados com os bancos fechados: a mesma lista das automações (processo-faturas-contas-a-pagar.md e processo-cheques.md),
+// até 25/12/2027. Feriado municipal de Feira de Santana entra quando o Marcus informar. Usados no gráfico do Omie e no calendário.
+export const FERIADOS = new Set([
+  '2026-10-12', '2026-11-02', '2026-11-15', '2026-11-20', '2026-12-25',
+  '2027-01-01', '2027-02-08', '2027-02-09', '2027-03-26', '2027-04-21', '2027-05-27',
+  '2027-07-02', '2027-09-07', '2027-10-12', '2027-11-02', '2027-11-15', '2027-11-22', '2027-12-25',
+]);

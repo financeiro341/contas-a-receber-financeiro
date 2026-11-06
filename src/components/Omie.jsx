@@ -3,7 +3,7 @@ import { lerDia, lerOmie, lerOmieAgora } from '../lib/api.js';
 import { dadosDoDia, gerarPdf, nomeDoArquivo } from '../utils/relatorioPdf.js';
 import leao from '../assets/leao.png';
 import { NOME_SITUACAO } from '../constants.js';
-import { brl, dataCurta, diaSemana, hoje, inteiro, nomeMes, somarDias } from '../utils/formato.js';
+import { FERIADOS, brl, dataCurta, diaSemana, hoje, inteiro, nomeMes, somarDias } from '../utils/formato.js';
 import { Estado, Vazio, iniciais, useDados } from './comum.jsx';
 
 // Data e hora no horário de Brasília (o cálculo feito na hora vem em UTC; o do relatório, com o fuso).
@@ -68,14 +68,6 @@ function Dinheiro({ valor }) {
 // "503,2 mil" (sem quebra de linha entre o número e o "mil").
 const mil = (v) => (Math.abs(v) >= 1000 ? `${(v / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}\u00a0mil` : brl(v).replace(/,00$/, ''));
 const comReal = (t) => (t.startsWith('R$') ? t : `R$\u00a0${t}`);
-
-// Feriados com os bancos fechados: a mesma lista das automações (processo-faturas-contas-a-pagar.md e processo-cheques.md),
-// até 25/12/2027. Feriado municipal de Feira de Santana entra quando o Marcus informar.
-const FERIADOS = new Set([
-  '2026-10-12', '2026-11-02', '2026-11-15', '2026-11-20', '2026-12-25',
-  '2027-01-01', '2027-02-08', '2027-02-09', '2027-03-26', '2027-04-21', '2027-05-27',
-  '2027-07-02', '2027-09-07', '2027-10-12', '2027-11-02', '2027-11-15', '2027-11-22', '2027-12-25',
-]);
 
 // Dias úteis de um mês (AAAA-MM-01 até o último dia), sem sábado, domingo e feriados: nesses dias o Omie não muda
 // (ninguém dá baixa), então o dia útil seguinte já mostra o efeito deles.
