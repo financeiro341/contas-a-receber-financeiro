@@ -15,6 +15,12 @@ somada ao que é próprio da cobrança: situação de cada cliente cobrado e o a
   leitura do Claude gravada pela tarefa "Relatório de cobrança paralelo CBC", que também grava o atraso no Omie
   por cliente (`situacao_do_dia`) e o relatório do dia com os totais (`relatorios_dia`).
 - **Mensagens completas desde 01/11/2026.**
+- **Aviso do WhatsApp (desde 09/11/2026):** faixa no topo, em todas as abas, quando o vigia do WhatsApp do financeiro
+  (função `vigia-evolution`, `{"acao":"situacao"}`, sem senha) responde `falha` ou `vigia_parado`. Consulta ao abrir,
+  a cada 5 minutos e quando a janela volta ao foco. Com `ok`, `atencao`, `sem_dados`, erro de rede ou resposta
+  estranha não mostra nada. Não tem botão de fechar; some sozinha quando o WhatsApp volta. Motivo: em 08 e
+  09/11/2026 o WhatsApp ficou quase um dia sem receber nada sem ninguém perceber. Código em `src/lib/vigia.js` e
+  `src/components/AvisoWhatsapp.jsx`.
 
 ## Telas
 1. Cobrança do dia: resumo, situação dos cobrados (filtra a lista), lista com busca e exportação, conversa do dia.
