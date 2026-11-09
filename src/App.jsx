@@ -13,6 +13,7 @@ import Omie from './components/Omie.jsx';
 import Conversa from './components/Conversa.jsx';
 import Caixa from './components/Caixa.jsx';
 import Calendario from './components/Calendario.jsx';
+import AvisoWhatsapp from './components/AvisoWhatsapp.jsx';
 
 const ABAS = [
   { id: 'hoje', nome: 'Cobrança do dia', curto: 'Cobrança', icone: 'ti-target-arrow' },
@@ -147,6 +148,7 @@ export default function App() {
             <button className="botao-topo icone" type="button" onClick={() => sair()} aria-label="Sair" title="Sair"><i className="ti ti-logout" aria-hidden="true" /></button>
           </div>
         </div>
+        <AvisoWhatsapp />
       </header>
       <main className={aba === 'conversas' ? 'main-caixa' : undefined}>
         <h1 className="so-leitor">{abaAtual?.nome}</h1>

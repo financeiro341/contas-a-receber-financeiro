@@ -38,6 +38,15 @@ h1, h2, h3 { color: var(--text-primary); margin: 0; letter-spacing: -0.01em; }
 .contador { min-width: 20px; height: 20px; padding: 0 6px; border-radius: var(--radius-pill); background: var(--accent); color: var(--text-on-accent); font-size: 11.5px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
 .contador.atrasado { background: var(--danger); color: #3A0B0B; }
 .topo .seletor-dia { flex: none; gap: 8px; }
+/* Aviso do WhatsApp do financeiro (09/11/2026): faixa compacta embaixo da linha do topo, em todas as abas, só com
+   "falha" (vermelho) ou "vigia_parado" (âmbar). Usa os tokens de status do tema (claro ou escuro), não os do menu:
+   o texto -text sobre o fundo -subtle passa 4,5:1 nos dois temas. Sem botão de fechar. */
+.aviso-whatsapp { background: var(--danger-subtle); color: var(--danger-text); border-top: 2px solid var(--danger-text); }
+.aviso-whatsapp.parado { background: var(--warning-subtle); color: var(--warning-text); border-top-color: var(--warning-text); }
+.aviso-whatsapp-dentro { max-width: var(--largura); margin: 0 auto; padding: 8px var(--margem); display: flex; gap: 8px; align-items: flex-start; font-size: 13.5px; line-height: 1.45; font-weight: 500; }
+.aviso-whatsapp-dentro .ti { font-size: 18px; line-height: 20px; flex: none; }
+.aviso-whatsapp-dentro p { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 560px) { .aviso-whatsapp-dentro { font-size: 12.5px; padding: 6px var(--margem); gap: 6px; } .aviso-whatsapp-dentro .ti { font-size: 16px; line-height: 18px; } }
 .dia-caixa { display: inline-flex; align-items: center; border: 1px solid var(--border); border-radius: var(--radius-md); background: rgba(255,255,255,0.06); min-height: 36px; }
 .dia-caixa .botao-topo { border: 0; background: none; min-height: 34px; min-width: 32px; }
 /* Calendário do topo (06/11/2026, no lugar do seletor nativo do navegador): painel azul-marinho com o dia escolhido em ouro,
