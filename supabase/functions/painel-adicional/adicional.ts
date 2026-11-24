@@ -12,12 +12,16 @@
 //   quitado  = resumo.nValPago (o valor da parcela que já foi pago, sem juros e multa);
 //   aberto   = resumo.nValAberto.
 // As metas usam o valor da parcela (quitado e aberto), para fechar exato; o recebido aparece como no Omie.
+// Desconto (24/11/2026, achado no primeiro cálculo real): o Omie lança o desconto concedido (ex.: "desconto de 50% concedido
+// pela diretora") como um recebimento de valor 0 com nDesconto, e o nValPago soma o desconto. Desconto não é dinheiro que
+// entrou: o devido da parcela é o valor menos o desconto, o quitado é o nValPago menos o desconto, e o lançamento só de
+// desconto não aparece como pagamento.
 //
 // Fora da meta e da lista (decisão do Marcus, 24/11/2026): títulos cancelados e os 4 clientes que não recebem o
 // adicional (decisões de 12/11/2026, processo-paybot.md). A aba só diz quantos ficaram de fora.
 
 export const CATEG_ADICIONAL = "1.02.97";
-export const VERSAO_ADICIONAL = "painel-cr adicional 2026-11-24a";
+export const VERSAO_ADICIONAL = "painel-adicional 2026-11-24b";
 export const REGISTRO_DESDE = "2026-10-01";
 
 // Códigos do cliente no Omie (conferidos em 24/11/2026). RDA CONFECCOES é outra empresa e continua na lista.
@@ -74,6 +78,9 @@ export function montar(titulos: Map<number, any>) {
       continue;
     }
     const cliente = Number(c.nCodCliente);
+    // Desconto do resumo; se o resumo não trouxer, a soma dos descontos dos lançamentos.
+    const somaDesc = (t.lancamentos || []).reduce((s: number, l: any) => s + ((l.cNatureza || "R") === "R" ? Number(l.nDesconto) || 0 : 0), 0);
+    const desconto = Math.max(Number(r.nDesconto) || 0, somaDesc);
     lista.push({
       titulo: Number(c.nCodTitulo),
       cliente,
@@ -83,24 +90,29 @@ export function montar(titulos: Map<number, any>) {
       cancelado: c.cStatus === "CANCELADO",
       excluido: cliente in EXCLUIDOS,
       valor: r2(c.nValorTitulo),
+      desconto: r2(desconto),
+      devido: r2((Number(c.nValorTitulo) || 0) - desconto),
       aberto: c.cStatus === "CANCELADO" ? 0 : r2(r.nValAberto),
-      quitado: r2(r.nValPago),
+      quitado: r2(Math.max(0, (Number(r.nValPago) || 0) - desconto)),
       recebido: r2(r.nValLiquido),
       juros_multa: r2((Number(r.nJuros) || 0) + (Number(r.nMulta) || 0)),
       boleto: !!c.cCodigoBarras,
       banco: BANCOS[String(c.nCodCC)] || null,
       obs: c.observacao ? String(c.observacao).slice(0, 200) : null,
+      // Só dinheiro que entrou (lançamento com valor); o que quitou da parcela é o lançamento sem juros e multa.
       pagamentos: (t.lancamentos || [])
-        .filter((l: any) => (l.cNatureza || "R") === "R" && dataDe(l.dDtLanc))
+        .filter((l: any) => (l.cNatureza || "R") === "R" && dataDe(l.dDtLanc) && (Number(l.nValLanc) || 0) > 0.004)
         .map((l: any) => ({
           dia: dataDe(l.dDtLanc),
           valor: r2(l.nValLanc),
-          // O que o pagamento quitou da parcela: o lançamento sem juros e multa e com o desconto dado.
-          parcela: r2((Number(l.nValLanc) || 0) - (Number(l.nJuros) || 0) - (Number(l.nMulta) || 0) + (Number(l.nDesconto) || 0)),
+          parcela: r2((Number(l.nValLanc) || 0) - (Number(l.nJuros) || 0) - (Number(l.nMulta) || 0)),
           banco: BANCOS[String(l.nCodCC)] || null,
           forma: forma(String(l.cObsLanc || "")),
         }))
         .sort((a: any, b: any) => a.dia.localeCompare(b.dia)),
+      descontos: (t.lancamentos || [])
+        .filter((l: any) => (l.cNatureza || "R") === "R" && dataDe(l.dDtLanc) && (Number(l.nDesconto) || 0) > 0.004)
+        .map((l: any) => ({ dia: dataDe(l.dDtLanc), valor: r2(l.nDesconto) })),
     });
   }
   lista.sort((a, b) => a.parcela - b.parcela || a.titulo - b.titulo);

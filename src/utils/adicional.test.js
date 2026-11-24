@@ -114,6 +114,32 @@ describe('resumo do cliente', () => {
   });
 });
 
+describe('desconto do Omie', () => {
+  const comDesconto = {
+    ...dados,
+    titulos: [
+      // Pagou a 1ª; a 2ª teve 100% de desconto (sai da conta): fica "Pagou tudo".
+      t({ titulo: 11, cliente: 60, parcela: 1, vencimento: '2026-11-10', valor: 445.77, devido: 445.77, aberto: 0, quitado: 445.77, recebido: 445.77,
+        pagamentos: [{ dia: '2026-11-10', valor: 445.77, parcela: 445.77 }] }),
+      t({ titulo: 12, cliente: 60, parcela: 2, vencimento: '2026-12-10', valor: 445.78, devido: 0, desconto: 445.78, aberto: 0, quitado: 0 }),
+      // Pagou a 1ª com 50% de desconto; a 2ª só tem desconto de 50%, o resto está em aberto: "Pagou só a 1ª".
+      t({ titulo: 13, cliente: 70, parcela: 1, vencimento: '2026-11-10', valor: 638.23, devido: 319.12, desconto: 319.11, aberto: 0, quitado: 319.12, recebido: 319.12,
+        pagamentos: [{ dia: '2026-11-19', valor: 319.12, parcela: 319.12 }] }),
+      t({ titulo: 14, cliente: 70, parcela: 2, vencimento: '2026-12-10', valor: 638.23, devido: 319.11, desconto: 319.12, aberto: 319.11, quitado: 0 }),
+    ],
+  };
+  it('desconto não conta como pagamento e diminui o previsto', () => {
+    const l = clientesDoAdicional(comDesconto, '2026-11-24');
+    expect(l.find((c) => c.cliente === 60).pagamento).toBe('tudo');
+    expect(l.find((c) => c.cliente === 70).pagamento).toBe('primeira');
+    const d60 = l.find((c) => c.cliente === 60).detalhe[1];
+    expect(fraseParcela(d60)).toBe('2ª parcela (R$ 445,78, desconto de R$ 445,78, vencimento 10/12): dispensada, desconto total no Omie.');
+    const [p1, p2] = resumoParcelas(comDesconto.titulos);
+    expect(p1).toMatchObject({ previsto: 764.89, quitado: 764.89, pagos: 2 });
+    expect(p2).toMatchObject({ previsto: 319.11, quitado: 0, pagos: 0, com_desconto: 2 });
+  });
+});
+
 describe('histórico de pagamentos', () => {
   it('do mais novo para o mais antigo, sem cancelados', () => {
     const h = historicoPagamentos(dados);

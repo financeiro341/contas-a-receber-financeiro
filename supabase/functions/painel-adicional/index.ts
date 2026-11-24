@@ -2,7 +2,7 @@
 // Fica separada da painel-cr para a publicação dela não mexer na função que já está no ar.
 // Login: o mesmo da painel-cr (usuário do Painel de Demandas; entra quem é admin ou do setor financeiro ou diretoria).
 // Omie só consulta (PesquisarLancamentos e ListarClientes), com as chaves dos segredos OMIE_APP_KEY e OMIE_APP_SECRET.
-import { adicionalDoOmie } from "./adicional.ts";
+import { VERSAO_ADICIONAL, adicionalDoOmie } from "./adicional.ts";
 
 const PAINEL_URL = "https://nbksfvivdodjdddreppv.supabase.co";
 const PAINEL_CHAVE = "sb_publishable_nOTE6VavsxhOqwrPNjQuew_3kFt2xx5"; // chave pública do Painel
@@ -140,7 +140,8 @@ const PRAZO_MS = 110_000; // a função tem 150 s; passou disso, para de ler o O
 let calculando: Promise<any> | null = null;
 
 async function ultimo(comDados: boolean) {
-  const campos = comDados ? "id,calculado_em,calculado_por,status,dados" : "id,calculado_em,status";
+  // Só vale o retrato feito pela versão atual da conta (um retrato de versão anterior é refeito).
+  const campos = comDados ? "id,calculado_em,calculado_por,status,dados,versao:dados->>versao" : "id,calculado_em,status,versao:dados->>versao";
   const r = await rest(`adicional_retratos?select=${campos}&status=in.(completo,incompleto)&order=calculado_em.desc&limit=1`);
   return r[0] || null;
 }
@@ -150,7 +151,8 @@ async function ultimaTentativa() {
 
 async function retrato(usuario: Usuario, atualizar: boolean) {
   if (!OMIE_KEY || !OMIE_SECRET) throw new Erro(503, "A ligação com o Omie ainda não foi configurada: faltam as chaves na função.");
-  const ult = await ultimo(false);
+  const achado = await ultimo(false);
+  const ult = achado && achado.versao === VERSAO_ADICIONAL ? achado : null;
   const idade = ult ? Date.now() - Date.parse(ult.calculado_em) : Infinity;
   if (ult && (idade < MIN_MS || (!atualizar && idade < VALE_MS))) return await ultimo(true);
   if (calculando) return await calculando;

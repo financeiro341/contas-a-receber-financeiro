@@ -5,6 +5,8 @@
 //    fica abaixo, a meta dos dias seguintes sobe. Pagamento em fim de semana ou feriado conta no dia útil seguinte.
 // Ficam fora das metas e da lista: títulos cancelados e os clientes que não recebem o adicional (marcados pelo servidor).
 // As metas usam o valor da parcela (sem juros e multa); o "recebido" é o do Omie (coluna "Pago ou Recebido").
+// Desconto concedido no Omie (ex.: 50% dado pela diretoria) não é pagamento: diminui o que a parcela deve (devido = valor menos
+// desconto) e não conta como quitado. Parcela com 100% de desconto não entra nas metas nem na situação do cliente.
 import { FERIADOS, diaSemana, somarDias } from './formato.js';
 
 export const P1 = { inicio: '2026-11-10', prazo: '2026-11-30' };
@@ -19,13 +21,16 @@ export function diasUteis(de, ate) {
 }
 
 export const valido = (t) => !t.cancelado && !t.excluido;
+// O que a parcela deve depois do desconto (retrato antigo, sem o campo: o valor).
+export const devidoDe = (t) => (t.devido ?? t.valor);
+const dispensada = (t) => devidoDe(t) <= 0.004;
 
 // Situação de cada parcela: previsto, recebido (Omie), quitado (parcela), em aberto e contagens.
 export function resumoParcelas(titulos) {
   return [1, 2].map((p) => {
     const todos = titulos.filter((t) => t.parcela === p);
     const ok = todos.filter(valido);
-    const previsto = soma(ok, (t) => t.valor);
+    const previsto = soma(ok, devidoDe);
     const quitado = soma(ok, (t) => t.quitado);
     return {
       parcela: p,
@@ -34,9 +39,11 @@ export function resumoParcelas(titulos) {
       quitado,
       aberto: soma(ok, (t) => t.aberto),
       juros_multa: soma(ok, (t) => t.juros_multa),
+      desconto: soma(ok, (t) => t.desconto),
       pct: previsto ? quitado / previsto : 0,
       titulos: ok.length,
-      pagos: ok.filter((t) => t.aberto <= 0.004).length,
+      pagos: ok.filter((t) => t.aberto <= 0.004 && !dispensada(t)).length,
+      com_desconto: ok.filter((t) => (t.desconto || 0) > 0.004).length,
       em_aberto: ok.filter((t) => t.aberto > 0.004).length,
       cancelados: todos.filter((t) => t.cancelado).length,
       excluidos: todos.filter((t) => !t.cancelado && t.excluido).length,
@@ -53,12 +60,12 @@ function diaQueConta(d, uteis) {
 export function diaADia(titulos, hoje) {
   const uteis = diasUteis(P1.inicio, P2.prazo);
   const ok = titulos.filter(valido);
-  const prev = { 1: soma(ok.filter((t) => t.parcela === 1), (t) => t.valor), 2: soma(ok.filter((t) => t.parcela === 2), (t) => t.valor) };
+  const prev = { 1: soma(ok.filter((t) => t.parcela === 1), devidoDe), 2: soma(ok.filter((t) => t.parcela === 2), devidoDe) };
   const acum = { 1: 0, 2: 0 };
   const porDia = {};
   for (const t of ok) {
     for (const p of t.pagamentos || []) {
-      if (!p.dia) continue;
+      if (!p.dia || !(p.valor > 0.004)) continue;
       if (p.dia < uteis[0]) { acum[t.parcela] += p.parcela; continue; }
       const d = diaQueConta(p.dia, uteis);
       if (!d) continue;
@@ -107,11 +114,11 @@ export function metaDeHoje(dias, hoje) {
 // Metas de novembro e dezembro.
 export function metasDoMes(titulos) {
   const ok = titulos.filter(valido);
-  const prev = { 1: soma(ok.filter((t) => t.parcela === 1), (t) => t.valor), 2: soma(ok.filter((t) => t.parcela === 2), (t) => t.valor) };
+  const prev = { 1: soma(ok.filter((t) => t.parcela === 1), devidoDe), 2: soma(ok.filter((t) => t.parcela === 2), devidoDe) };
   let p1Nov = 0, p1Dez = 0, p2 = 0;
   for (const t of ok) {
     for (const p of t.pagamentos || []) {
-      if (!p.dia) continue;
+      if (!p.dia || !(p.valor > 0.004)) continue;
       if (t.parcela === 1) { if (p.dia <= P1.prazo) p1Nov += p.parcela; else if (p.dia <= P2.prazo) p1Dez += p.parcela; } else if (p.dia <= P2.prazo) p2 += p.parcela;
     }
   }
@@ -122,7 +129,8 @@ export function metasDoMes(titulos) {
 
 // Situação de pagamento do cliente nas duas parcelas (pedido do Marcus, 24/11/2026, 11h46: "se não pagou, se pagou só a
 // primeira parcela, ou se pagou as duas"). Parcela paga = nada em aberto; com algo quitado e saldo em aberto = paga em parte.
-// Cliente com uma parcela só (a outra cancelada) que pagou a que tem fica como "Pagou tudo".
+// Cliente com uma parcela só (a outra cancelada ou com 100% de desconto) que pagou a que tem fica como "Pagou tudo".
+// Só conta como pago o dinheiro que entrou: parcela "quitada" no Omie só com desconto fica fora da conta.
 export const PAGAMENTOS = [
   { id: 'nenhuma', nome: 'Não pagou', plural: 'Não pagaram', cor: 'cor-vermelho' },
   { id: 'parte', nome: 'Pagou uma parte', plural: 'Pagaram uma parte', cor: 'cor-amarelo' },
@@ -133,7 +141,7 @@ export const PAGAMENTOS = [
 ];
 export const NOME_PAGAMENTO = Object.fromEntries(PAGAMENTOS.map((x) => [x.id, x]));
 
-const estadoParcela = (t) => (!t ? null : t.aberto <= 0.004 ? 'paga' : t.quitado > 0.004 ? 'parte' : 'aberta');
+const estadoParcela = (t) => (!t || dispensada(t) ? null : t.aberto <= 0.004 ? 'paga' : t.quitado > 0.004 ? 'parte' : 'aberta');
 export function situacaoPagamento(p1, p2) {
   const a = estadoParcela(p1), b = estadoParcela(p2);
   if (a && b) {
@@ -144,6 +152,7 @@ export function situacaoPagamento(p1, p2) {
     return 'parte';
   }
   const x = a || b;
+  if (!x) return 'tudo';
   return x === 'paga' ? 'tudo' : x === 'parte' ? 'parte' : 'nenhuma';
 }
 
@@ -154,13 +163,15 @@ export function clientesDoAdicional(dados, hoje) {
   for (const t of (dados.titulos || []).filter(valido)) {
     const c = g.get(t.cliente) || { cliente: t.cliente, p: {}, aberto: 0, vencido: 0, quitado: 0, recebido: 0, venc_mais_antigo: null, obs: new Set(), ultimo_pagamento: null };
     // Dois títulos da mesma parcela para o mesmo cliente (raro): soma, e a parcela só fica paga se os dois estiverem pagos.
-    const atual = c.p[t.parcela] || { valor: 0, aberto: 0, quitado: 0, recebido: 0, vencimento: t.vencimento, pagamentos: [] };
+    const atual = c.p[t.parcela] || { valor: 0, devido: 0, desconto: 0, aberto: 0, quitado: 0, recebido: 0, vencimento: t.vencimento, pagamentos: [] };
     atual.valor += t.valor;
+    atual.devido += devidoDe(t);
+    atual.desconto += t.desconto || 0;
     atual.aberto += t.aberto;
     atual.quitado += t.quitado;
     atual.recebido += t.recebido;
     if (t.vencimento && (!atual.vencimento || t.vencimento < atual.vencimento)) atual.vencimento = t.vencimento;
-    atual.pagamentos.push(...(t.pagamentos || []));
+    atual.pagamentos.push(...(t.pagamentos || []).filter((pg) => pg.valor > 0.004));
     c.p[t.parcela] = atual;
     c.aberto += t.aberto;
     c.quitado += t.quitado;
@@ -169,7 +180,7 @@ export function clientesDoAdicional(dados, hoje) {
       c.vencido += t.aberto;
       if (!c.venc_mais_antigo || t.vencimento < c.venc_mais_antigo) c.venc_mais_antigo = t.vencimento;
     }
-    for (const pg of t.pagamentos || []) if (pg.dia && (!c.ultimo_pagamento || pg.dia > c.ultimo_pagamento)) c.ultimo_pagamento = pg.dia;
+    for (const pg of t.pagamentos || []) if (pg.dia && pg.valor > 0.004 && (!c.ultimo_pagamento || pg.dia > c.ultimo_pagamento)) c.ultimo_pagamento = pg.dia;
     if (t.obs) c.obs.add(t.obs);
     g.set(t.cliente, c);
   }
@@ -203,8 +214,8 @@ export function clientesDoAdicional(dados, hoje) {
         const x = c.p[n];
         const pags = [...x.pagamentos].filter((pg) => pg.dia).sort((a, b) => a.dia.localeCompare(b.dia));
         return {
-          parcela: n, valor: r2(x.valor), aberto: r2(x.aberto), quitado: r2(x.quitado), recebido: r2(x.recebido), vencimento: x.vencimento,
-          estado: x.aberto <= 0.004 ? 'paga' : x.quitado > 0.004 ? 'parte' : (x.vencimento && x.vencimento < hoje ? 'vencida' : 'a_vencer'),
+          parcela: n, valor: r2(x.valor), devido: r2(x.devido), desconto: r2(x.desconto), aberto: r2(x.aberto), quitado: r2(x.quitado), recebido: r2(x.recebido), vencimento: x.vencimento,
+          estado: x.devido <= 0.004 ? 'desconto' : x.aberto <= 0.004 ? 'paga' : x.quitado > 0.004 ? 'parte' : (x.vencimento && x.vencimento < hoje ? 'vencida' : 'a_vencer'),
           dias_atraso: x.aberto > 0.004 && x.vencimento && x.vencimento < hoje ? Math.round((Date.parse(hoje) - Date.parse(x.vencimento)) / 864e5) : 0,
           pagamentos: pags.map((pg) => ({ dia: pg.dia, valor: pg.valor, forma: [pg.forma, pg.banco].filter(Boolean).join(', ') })),
         };
@@ -219,7 +230,9 @@ const real = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', 
 
 // Uma frase por parcela, para o resumo do cliente: "1ª parcela (R$ 135,08, venc. 10/11): paga em 12/11." etc.
 export function fraseParcela(d) {
-  const cab = `${d.parcela}ª parcela (${real(d.valor)}, vencimento ${dm(d.vencimento)})`;
+  const desc = d.desconto > 0.004 ? `, desconto de ${real(d.desconto)}` : '';
+  const cab = `${d.parcela}ª parcela (${real(d.valor)}${desc}, vencimento ${dm(d.vencimento)})`;
+  if (d.estado === 'desconto') return `${cab}: dispensada, desconto total no Omie.`;
   const ultimo = d.pagamentos.length ? d.pagamentos[d.pagamentos.length - 1].dia : null;
   if (d.estado === 'paga') return `${cab}: paga${ultimo ? ` em ${dm(ultimo)}` : ''}${d.recebido - d.quitado > 0.004 ? `, ${real(d.recebido)} com juros e multa` : ''}.`;
   if (d.estado === 'parte') return `${cab}: pagou ${real(d.quitado)}${ultimo ? ` (último pagamento em ${dm(ultimo)})` : ''}, faltam ${real(d.aberto)}${d.dias_atraso ? `, vencida há ${d.dias_atraso} ${d.dias_atraso === 1 ? 'dia' : 'dias'}` : ''}.`;
@@ -235,7 +248,7 @@ export function historicoPagamentos(dados) {
   const cad = dados.clientes || {};
   const linhas = [];
   for (const t of (dados.titulos || []).filter((x) => !x.cancelado)) {
-    for (const p of t.pagamentos || []) {
+    for (const p of (t.pagamentos || []).filter((x) => x.valor > 0.004)) {
       linhas.push({
         dia: p.dia, cliente: t.cliente, nome: cad[String(t.cliente)]?.nome || `Cliente ${t.cliente}`,
         parcela: t.parcela, valor: p.valor, quitou: p.parcela, forma: p.forma || '', banco: p.banco || '', titulo: t.titulo, excluido: !!t.excluido,

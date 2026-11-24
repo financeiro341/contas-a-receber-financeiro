@@ -145,7 +145,7 @@ function Parcelas({ parcelas, hoje }) {
                 <span className="mini">vencimento {dataCurta(venc[p.parcela])}</span>
                 <b className="ad-pct">{pctTexto(p.pct)}<small> pago</small></b>
               </div>
-              <p className="sub">{brl(p.previsto)} em {inteiro(p.titulos)} títulos</p>
+              <p className="sub">{brl(p.previsto)} em {inteiro(p.titulos)} títulos{p.desconto > 0 ? `, já sem ${brl(p.desconto)} de desconto em ${inteiro(p.com_desconto)} ${plural(p.com_desconto, 'título', 'títulos')}` : ''}</p>
               <div className="omie-regua" role="img" aria-label={`${pctTexto(p.pct)} pago, ${total ? Math.round((p.aberto / total) * 100) : 0}% em aberto`}>
                 {p.quitado > 0 && <i className="c-rec" style={{ flexGrow: p.quitado }} />}
                 {p.aberto > 0 && <i className={vencida ? 'c-atr' : 'c-ven'} style={{ flexGrow: p.aberto }} />}
@@ -342,7 +342,7 @@ function ResumoCliente({ c }) {
     : ct.situacao ? `Última cobrança no WhatsApp: ${NOME_SITUACAO[ct.situacao] || ct.situacao} em ${dataCurta(ct.situacao_dia)}.`
       : 'Sem cobrança pelo WhatsApp desde 05/11.';
   const linhas = [
-    ...c.detalhe.map((d) => ({ icone: d.estado === 'paga' ? 'ti-circle-check' : d.estado === 'a_vencer' ? 'ti-clock' : 'ti-alert-circle', texto: fraseParcela(d), tom: d.estado })),
+    ...c.detalhe.map((d) => ({ icone: d.estado === 'paga' || d.estado === 'desconto' ? 'ti-circle-check' : d.estado === 'a_vencer' ? 'ti-clock' : 'ti-alert-circle', texto: fraseParcela(d), tom: d.estado })),
     { icone: 'ti-brand-whatsapp', texto: `${whats}${ct?.nome && ct.nome !== c.nome ? ` Contato: ${ct.nome}${c.contatos_qtd > 1 ? ` e mais ${c.contatos_qtd - 1} ${plural(c.contatos_qtd - 1, 'número', 'números')}` : ''}.` : ''}` },
     ct?.boleto_em && { icone: 'ti-file-invoice', texto: `Boleto do adicional pelo PayBot: ${BOLETO[ct.boleto_status] || 'enviado'} (${dmy(ct.boleto_em)}${ct.boletos > 1 ? `, ${ct.boletos} envios desde 05/11` : ''}).`, tom: ct.boleto_status === 'ERROR' ? 'vencida' : undefined },
     ct?.retorno && { icone: 'ti-alarm', texto: `Retorno marcado para ${dataCurta(ct.retorno.dia)}${ct.retorno.hora ? ` às ${ct.retorno.hora}` : ''}.` },
@@ -464,6 +464,7 @@ function Rodape({ d, fora }) {
         <ul>
           <li>Fonte: Omie, contas a receber da categoria Adicional Anual (1.02.97), parcelas 1/2 (vencimento 10/11) e 2/2 (vencimento 10/12) registradas desde outubro de 2026. Só consulta: nada é alterado no Omie.</li>
           <li>Recebido é a coluna "Pago ou Recebido" do Omie, com juros e multa. As metas usam só o valor da parcela quitado, para fechar exato.</li>
+          <li>Desconto concedido no Omie não conta como pagamento: ele diminui o valor da parcela. Parcela com desconto total sai da conta; parcela que o Omie mostra como paga só com desconto não aparece como paga.</li>
           <li>Novembro: receber 100% da 1ª parcela até 30/11. Dezembro: a 2ª parcela e o que sobrou da 1ª até 31/12.</li>
           <li>Meta do dia: o saldo em aberto no começo do dia dividido pelos dias úteis que faltam até o prazo, contando o próprio dia. Se um dia fica abaixo, a meta dos dias seguintes sobe. Fim de semana e feriado (20/11 e 25/12) não contam.</li>
           {!d.cadastro_completo && <li>O cadastro de clientes do Omie não respondeu nesta consulta: alguns nomes podem aparecer pelo código.</li>}

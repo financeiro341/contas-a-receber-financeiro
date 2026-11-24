@@ -24,7 +24,8 @@ globalThis.fetch = async (input: any, init: any = {}) => {
   }
   if (url.includes("/rest/v1/adicional_retratos?select")) {
     const lista = url.includes("status=in.(completo,incompleto)") ? db.retratos.filter((r: any) => r.status === "completo" || r.status === "incompleto") : db.retratos;
-    return resp(lista.slice(-1));
+    // Como o PostgREST faz com versao:dados->>versao.
+    return resp(lista.slice(-1).map((r: any) => ({ ...r, versao: r.dados?.versao ?? null })));
   }
   if (url.includes("rpc/painel_adicional_whatsapp")) { db.whats = JSON.parse(init.body); return resp({ desde: db.whats.p_desde, clientes: {}, anotacoes: {} }); }
   if (url.includes("/rest/v1/adicional_anotacoes")) {
