@@ -118,6 +118,7 @@ globalThis.fetch = async (input: any, init: any = {}) => {
     return resp(lista.slice(-1));
   }
   if (url.includes("/rest/v1/adicional_retratos") && metodo === "POST") { const r = { id: (db.adRetratos || []).length + 1, calculado_em: new Date(Date.now() - (db.idadeAdicional || 0)).toISOString(), dados: {}, ...JSON.parse(init.body) }; db.adRetratos = [...(db.adRetratos || []), r]; return resp([r], 201); }
+  if (url.includes("/rest/v1/adicional_retratos?id=lt.") && metodo === "PATCH") { const lim = Number(url.split("id=lt.")[1].split("&")[0]); for (const r of db.adRetratos || []) if (r.id < lim) r.dados = {}; return new Response(null, { status: 204 }); }
   if (url.includes("/rest/v1/adicional_retratos?select")) {
     const todos = db.adRetratos || [];
     const lista = url.includes("status=in.(completo,incompleto)") ? todos.filter((r: any) => r.status === "completo" || r.status === "incompleto") : todos;
@@ -363,6 +364,7 @@ const midia = async (id: string) => { const r = await fetch(`http://fn/?acao=mid
   ok(db.adWhats.p_desde === "2026-11-05" && db.adWhats.p_clientes.includes(4112028795) && db.adWhats.p_clientes.includes(555), "adicional: situação do WhatsApp pedida para os clientes");
   ok(x.whatsapp && x.titulos.find((t: any) => t.titulo === 3).cancelado === true, "adicional: cancelado marcado");
   ok((db.omieCalls || []).slice(antesCalls).every((c: string) => c === "PesquisarLancamentos" || c === "ListarClientes"), "adicional: no Omie, só consulta");
+  ok(db.adRetratos.at(-1).dados.titulos?.length === 3 && db.adRetratos.slice(0, -1).every((r: any) => !r.dados.titulos), "adicional: só o retrato mais novo guarda os títulos");
   const nPesq = db.pesquisasAdicional.length;
   [s, x] = await g("acao=adicional");
   ok(s === 200 && db.pesquisasAdicional.length === nPesq && x.titulos.length === 3, "adicional: retrato reaproveitado por 10 minutos");

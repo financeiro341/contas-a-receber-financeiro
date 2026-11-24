@@ -984,10 +984,14 @@ async function retratoAdicional(usuario: Usuario, atualizar: boolean) {
     };
     try {
       const dados = await adicionalDoOmie(consultar, clientes);
-      return (await rest("adicional_retratos", {
+      const novo = (await rest("adicional_retratos", {
         method: "POST",
         body: JSON.stringify({ calculado_por: usuario.nome, status: dados.status, dados }),
       }))[0];
+      // Só o retrato mais novo guarda os títulos (cerca de 150 KB): os anteriores ficam só com a data e o status.
+      await rest(`adicional_retratos?id=lt.${Number(novo.id)}&dados=neq.%7B%7D`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ dados: {} }) })
+        .catch((e) => console.error(`adicional: retratos antigos não limpos (${(e as Error).message})`));
+      return novo;
     } catch (e) {
       await rest("adicional_retratos", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ calculado_por: usuario.nome, status: "erro" }) }).catch(() => {});
       throw e;
