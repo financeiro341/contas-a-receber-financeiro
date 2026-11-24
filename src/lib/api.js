@@ -6,6 +6,8 @@ import { createClient } from '@supabase/supabase-js';
 const PAINEL_URL = 'https://nbksfvivdodjdddreppv.supabase.co';
 const PAINEL_CHAVE = 'sb_publishable_nOTE6VavsxhOqwrPNjQuew_3kFt2xx5'; // chave pública
 const FUNCAO = 'https://mhihrbchidudhgvpouia.supabase.co/functions/v1/painel-cr';
+// Aba Adicional Anual (24/11/2026): função própria, separada da painel-cr.
+const FUNCAO_ADICIONAL = 'https://mhihrbchidudhgvpouia.supabase.co/functions/v1/painel-adicional';
 
 // Igual ao Painel de Demandas (D-006): o login vira um e-mail interno.
 export const LOGIN_EMAIL_DOMAIN = 'demandas.castelobrancocontabilidade.com.br';
@@ -61,11 +63,11 @@ function decodificarNomes(v, chave) {
   return v;
 }
 
-async function ler(params) {
+async function ler(params, funcao = FUNCAO) {
   const s = await sessaoAtual();
   if (!s) throw Object.assign(new Error('Entre de novo.'), { codigo: 401 });
   const q = new URLSearchParams(params).toString();
-  const r = await fetch(`${FUNCAO}?${q}`, { headers: { Authorization: `Bearer ${s.access_token}` } });
+  const r = await fetch(`${funcao}?${q}`, { headers: { Authorization: `Bearer ${s.access_token}` } });
   let corpo = {};
   try { corpo = decodificarNomes(JSON.parse(await r.text())); } catch { corpo = {}; }
   if (!r.ok) throw Object.assign(new Error(corpo.erro || 'Não foi possível ler os dados.'), { codigo: r.status });
@@ -83,7 +85,7 @@ export const lerOmie = () => ler({ acao: 'omie' });
 export const lerOmieAgora = (atualizar = false) => ler({ acao: 'omie_agora', ...(atualizar ? { atualizar: '1' } : {}) });
 export const lerQuemCobrar = (atualizar = false) => ler({ acao: 'quem_cobrar', ...(atualizar ? { atualizar: '1' } : {}) });
 // Adicional Anual (24/11/2026): títulos da campanha no Omie (só consulta, reaproveitados por 10 minutos) com o WhatsApp e as anotações.
-export const lerAdicional = (atualizar = false) => ler({ acao: 'adicional', ...(atualizar ? { atualizar: '1' } : {}) });
+export const lerAdicional = (atualizar = false) => ler({ acao: 'adicional', ...(atualizar ? { atualizar: '1' } : {}) }, FUNCAO_ADICIONAL);
 export const buscarNaConversa = (contato, q) => ler({ acao: 'buscar_conversa', contato: String(contato), q });
 
 // Caixa de entrada (fase 2).
@@ -95,10 +97,10 @@ export const lerMidia = (id) => ler({ acao: 'midia', id: String(id) });
 export const lerTitulos = (contato) => ler({ acao: 'titulos', contato: String(contato) });
 export const enviarBoleto = (contato, titulo, texto) => postar({ acao: 'enviar_boleto', contato, titulo, texto });
 
-async function postar(corpo) {
+async function postar(corpo, funcao = FUNCAO) {
   const s = await sessaoAtual();
   if (!s) throw Object.assign(new Error('Entre de novo.'), { codigo: 401 });
-  const r = await fetch(FUNCAO, {
+  const r = await fetch(funcao, {
     method: 'POST',
     headers: { Authorization: `Bearer ${s.access_token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify(corpo),
@@ -109,7 +111,7 @@ async function postar(corpo) {
   return resposta;
 }
 
-export const anotarAdicional = (cliente, texto) => postar({ acao: 'adicional_anotar', cliente, texto });
+export const anotarAdicional = (cliente, texto) => postar({ acao: 'adicional_anotar', cliente, texto }, FUNCAO_ADICIONAL);
 export const enviarTexto = (contato, texto) => postar({ acao: 'enviar_texto', contato, texto });
 
 // Extensão de ligações do Chrome (06/11/2026): só administrador gera o código e desliga.

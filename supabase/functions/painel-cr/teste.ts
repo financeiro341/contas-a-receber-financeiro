@@ -72,22 +72,6 @@ globalThis.fetch = async (input: any, init: any = {}) => {
       const t = (cod: number, venc: string, st: string, gerado: string, cat = "1.02.02") => ({ codigo_lancamento_omie: cod, codigo_cliente_fornecedor: 4112028795, numero_documento: "9007", numero_parcela: "001/001", data_vencimento: venc, valor_documento: 1621, status_titulo: st, codigo_categoria: cat, boleto: { cGerado: gerado }, codigo_barras_ficha_compensacao: "03399.0" });
       return resp({ pagina: 1, total_de_paginas: 1, conta_receber_cadastro: [{ ...t(5, "01/11/2026", "A VENCER", "S"), codigo_cliente_fornecedor: 999 }, t(3, "10/12/2026", "A VENCER", "S", "1.02.97"), t(1, "10/11/2026", "A VENCER", "S"), t(2, "10/10/2026", "ATRASADO", "N"), t(4, "10/09/2026", "PAGO", "S")] });
     }
-    if (b.call === "ListarClientes") {
-      db.cadastros = [...(db.cadastros || []), b.param[0]];
-      return resp({ clientes_cadastro: b.param[0].clientesPorCodigo.map((c: any) => ({ codigo_cliente_omie: c.codigo_cliente_omie, razao_social: `CLIENTE ${c.codigo_cliente_omie}`, telefone1_ddd: "75", telefone1_numero: "99999", email: "nao@vai.br" })) });
-    }
-    if (b.call === "PesquisarLancamentos" && b.param[0].cCodCateg === "1.02.97") {
-      db.pesquisasAdicional = [...(db.pesquisasAdicional || []), b.param[0]];
-      const ad = (id: number, parc: string, venc: string, st: string, cli: number, valor: number, pago: number) => ({
-        cabecTitulo: { nCodTitulo: id, cCodCateg: "1.02.97", cNumParcela: parc, dDtRegistro: "20/10/2026", dDtVenc: venc, cStatus: st, nCodCliente: cli, nValorTitulo: valor, nCodCC: 4153071576 },
-        resumo: { nValAberto: st === "CANCELADO" ? 0 : valor - pago, nValPago: pago, nValLiquido: pago },
-        lancamentos: pago ? [{ cNatureza: "R", dDtLanc: "12/11/2026", nValLanc: pago, nCodCC: 4153071576, cObsLanc: "PIX" }] : [],
-      });
-      const pg = b.param[0].nPagina === 1
-        ? [ad(1, "001/002", "10/11/2026", "RECEBIDO", 4112028795, 100, 100), ad(2, "002/002", "10/12/2026", "A VENCER", 4112028795, 100, 0)]
-        : [ad(3, "001/002", "10/11/2026", "CANCELADO", 555, 80, 0)];
-      return resp({ nTotRegistros: 3, nTotPaginas: 2, titulosEncontrados: pg });
-    }
     if (b.call === "PesquisarLancamentos") {
       const pr = b.param[0];
       if (db.omieBloqueado) { db.pesquisasBloqueadas = (db.pesquisasBloqueadas || 0) + 1; return resp({ faultstring: "ERROR: Consumo redundante detectado. Aguarde 60 segundos." }, 500); }
@@ -117,15 +101,6 @@ globalThis.fetch = async (input: any, init: any = {}) => {
     const lista = url.includes("status=in.(completo,incompleto)") ? todos.filter((r: any) => r.status === "completo" || r.status === "incompleto") : todos;
     return resp(lista.slice(-1));
   }
-  if (url.includes("/rest/v1/adicional_retratos") && metodo === "POST") { const r = { id: (db.adRetratos || []).length + 1, calculado_em: new Date(Date.now() - (db.idadeAdicional || 0)).toISOString(), dados: {}, ...JSON.parse(init.body) }; db.adRetratos = [...(db.adRetratos || []), r]; return resp([r], 201); }
-  if (url.includes("/rest/v1/adicional_retratos?id=lt.") && metodo === "PATCH") { const lim = Number(url.split("id=lt.")[1].split("&")[0]); for (const r of db.adRetratos || []) if (r.id < lim) r.dados = {}; return new Response(null, { status: 204 }); }
-  if (url.includes("/rest/v1/adicional_retratos?select")) {
-    const todos = db.adRetratos || [];
-    const lista = url.includes("status=in.(completo,incompleto)") ? todos.filter((r: any) => r.status === "completo" || r.status === "incompleto") : todos;
-    return resp(lista.slice(-1));
-  }
-  if (url.includes("rpc/painel_adicional_whatsapp")) { db.adWhats = JSON.parse(init.body); return resp({ desde: db.adWhats.p_desde, clientes: {}, anotacoes: {} }); }
-  if (url.includes("/rest/v1/adicional_anotacoes")) { db.anotacoes = [...(db.anotacoes || []), { metodo, url, corpo: init.body }]; return metodo === "DELETE" ? new Response(null, { status: 204 }) : resp([{ texto: JSON.parse(init.body).texto, usuario_nome: "Maria Clara", em: "2026-11-24T12:00:00Z" }], 201); }
   if (url.includes("rpc/painel_quem_cobrar")) { db.quemCobrar = JSON.parse(init.body); return resp({ dia: db.quemCobrar.p_dia, contatos: [{ contato_id: 94, valor: 500 }], sem_numero: { clientes: 1, valor: 300 } }); }
   if (url.includes("rpc/painel_buscar_conversa")) { db.busca = JSON.parse(init.body); return resp({ resultados: [], mais: false }); }
   if (url.includes("rpc/painel_omie")) return resp({ dia: "2026-11-04", financeiro: { recebido_total: 1, atualizado: "2026-11-04T18:14:00-03:00" }, atrasos: [] });
@@ -351,27 +326,4 @@ const midia = async (id: string) => { const r = await fetch(`http://fn/?acao=mid
   [s, x] = await g("acao=omie_agora&atualizar=1");
   ok(s === 429 && db.pesquisasBloqueadas === 1 && /2 minutos/.test(x.erro), "sem cálculo guardado, espera 2 minutos depois do erro");
   db.omieBloqueado = false;
-}
-
-{
-  // Adicional Anual (24/11/2026): lê o Omie só para consulta, guarda o retrato, reaproveita e grava a anotação manual.
-  const g = async (q: string) => { const r = await fetch("http://fn/?" + q, { headers: { Authorization: "Bearer tok5" } }); return [r.status, await r.json()] as const; };
-  const antesCalls = (db.omieCalls || []).length;
-  let [s, x] = await g("acao=adicional");
-  ok(s === 200 && x.status === "completo" && x.titulos.length === 3 && x.lidos === 3 && db.pesquisasAdicional.length === 2, "adicional lê as 2 páginas da categoria 1.02.97 " + JSON.stringify({ s, e: x.erro }));
-  ok(db.pesquisasAdicional[0].dDtVencDe === "01/10/2026" && db.pesquisasAdicional[0].cNatureza === "R", "adicional: filtro da campanha");
-  ok(x.clientes["4112028795"].nome === "CLIENTE 4112028795" && !JSON.stringify(x.clientes).includes("nao@vai.br"), "adicional: nome do cadastro, sem e-mail");
-  ok(db.adWhats.p_desde === "2026-11-05" && db.adWhats.p_clientes.includes(4112028795) && db.adWhats.p_clientes.includes(555), "adicional: situação do WhatsApp pedida para os clientes");
-  ok(x.whatsapp && x.titulos.find((t: any) => t.titulo === 3).cancelado === true, "adicional: cancelado marcado");
-  ok((db.omieCalls || []).slice(antesCalls).every((c: string) => c === "PesquisarLancamentos" || c === "ListarClientes"), "adicional: no Omie, só consulta");
-  ok(db.adRetratos.at(-1).dados.titulos?.length === 3 && db.adRetratos.slice(0, -1).every((r: any) => !r.dados.titulos), "adicional: só o retrato mais novo guarda os títulos");
-  const nPesq = db.pesquisasAdicional.length;
-  [s, x] = await g("acao=adicional");
-  ok(s === 200 && db.pesquisasAdicional.length === nPesq && x.titulos.length === 3, "adicional: retrato reaproveitado por 10 minutos");
-  let [ps, pb] = await post({ acao: "adicional_anotar", cliente: 4112028795, texto: "  contestou   o valor " });
-  ok(ps === 200 && pb.anotacao.texto === "contestou o valor" && JSON.parse(db.anotacoes.at(-1).corpo).usuario_nome === "Maria Clara", "adicional: anotação gravada");
-  [ps, pb] = await post({ acao: "adicional_anotar", cliente: 4112028795, texto: "" });
-  ok(ps === 200 && pb.anotacao === null && db.anotacoes.at(-1).metodo === "DELETE", "adicional: anotação vazia apaga");
-  [ps, pb] = await post({ acao: "adicional_anotar", cliente: 4112028795, texto: "x".repeat(501) });
-  ok(ps === 400, "adicional: anotação longa recusada");
 }

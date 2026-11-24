@@ -6,7 +6,6 @@
 // ou está na tabela atendentes com pode_enviar (decisão do Marcus: Maria Clara e os administradores).
 // A chave da Evolution fica só no segredo EVOLUTION_APIKEY da função; nunca vai ao navegador.
 import { retratoDoOmie } from "./omie_totais.ts";
-import { adicionalDoOmie } from "./adicional.ts";
 
 const PAINEL_URL = "https://nbksfvivdodjdddreppv.supabase.co";
 const PAINEL_CHAVE = "sb_publishable_nOTE6VavsxhOqwrPNjQuew_3kFt2xx5"; // chave pública do Painel
@@ -346,9 +345,8 @@ async function midia(id: string) {
 // (isso pode ter tarifa do banco). As chaves ficam só nos segredos OMIE_APP_KEY e OMIE_APP_SECRET da função.
 const OMIE_KEY = Deno.env.get("OMIE_APP_KEY") || "";
 const OMIE_SECRET = Deno.env.get("OMIE_APP_SECRET") || "";
-// Só consulta: listar títulos, obter o boleto já emitido, pesquisar lançamentos (totais do dia, Quem cobrar hoje e
-// Adicional Anual) e listar clientes por código (nome e telefone na aba Adicional Anual, desde 24/11/2026).
-const OMIE_SO_LEITURA = new Set(["ListarContasReceber", "ObterBoleto", "PesquisarLancamentos", "ListarClientes"]);
+// Só consulta: listar títulos, obter o boleto já emitido e pesquisar lançamentos (totais do dia e Quem cobrar hoje).
+const OMIE_SO_LEITURA = new Set(["ListarContasReceber", "ObterBoleto", "PesquisarLancamentos"]);
 const CATEGORIAS: Record<string, string> = { "1.02.02": "Honorários", "1.02.97": "Adicional anual" };
 
 async function omie(caminho: string, call: string, param: Record<string, unknown>) {
@@ -805,24 +803,6 @@ async function tratarPost(u: Usuario, corpo: any) {
       await evento(l.contato_id, u, "ligacao_desfeita", {});
       return { ok: true };
     }
-    case "adicional_anotar": {
-      // Anotação manual do Adicional Anual, por cliente do Omie: por cima do que vem do Omie e do WhatsApp. Vazio apaga.
-      const cliente = inteiro(corpo.cliente, "Cliente");
-      const texto = String(corpo.texto ?? "").replace(/\s+/g, " ").trim();
-      if (texto.length > 500) throw new Erro(400, "A anotação passou de 500 caracteres.");
-      if (!texto) {
-        await rest(`adicional_anotacoes?cliente_omie=eq.${cliente}`, { method: "DELETE", headers: { Prefer: "return=minimal" } });
-        await evento(null, u, "adicional_anotacao_apagada", { cliente });
-        return { ok: true, anotacao: null };
-      }
-      const [a] = await rest("adicional_anotacoes?on_conflict=cliente_omie", {
-        method: "POST",
-        headers: { Prefer: "resolution=merge-duplicates,return=representation" },
-        body: JSON.stringify({ cliente_omie: cliente, texto, usuario_id: u.id, usuario_nome: u.nome, em: new Date().toISOString() }),
-      });
-      await evento(null, u, "adicional_anotacao", { cliente });
-      return { ok: true, anotacao: { texto: a.texto, por: a.usuario_nome, em: a.em } };
-    }
     case "extensao_codigo": {
       // Código de ligação da extensão de ligações (06/11/2026): só administrador gera; aparece uma vez só, aqui;
       // no banco fica só o resumo sha256. Quem tem o código só consegue GRAVAR ligações (função registrar-ligacoes).
@@ -927,87 +907,6 @@ async function retratoOmie(usuario: Usuario, atualizar: boolean) {
   return await calculando;
 }
 
-// Adicional Anual (24/11/2026): os títulos da campanha lidos no Omie (cerca de 15 páginas e 7 de cadastro, de 20 a 40 s),
-// guardados em adicional_retratos e reaproveitados por 10 minutos; "Atualizar" refaz, mas não antes de 2 minutos.
-// Mesma trava dos retratos dos honorários: um cálculo por vez, quem chega durante o cálculo espera o resultado.
-let calculandoAdicional: Promise<any> | null = null;
-const CAMPANHA_DESDE = "2026-11-05"; // primeiros boletos do adicional pelo PayBot (processo-paybot.md)
-
-async function ultimoAdicional(comDados: boolean) {
-  const campos = comDados ? "id,calculado_em,calculado_por,status,dados" : "id,calculado_em,status";
-  const r = await rest(`adicional_retratos?select=${campos}&status=in.(completo,incompleto)&order=calculado_em.desc&limit=1`);
-  return r[0] || null;
-}
-
-async function retratoAdicional(usuario: Usuario, atualizar: boolean) {
-  if (!OMIE_KEY || !OMIE_SECRET) throw new Erro(503, "A ligação com o Omie ainda não foi configurada: faltam as chaves na função.");
-  const ult = await ultimoAdicional(false);
-  const idade = ult ? Date.now() - Date.parse(ult.calculado_em) : Infinity;
-  if (ult && (idade < RETRATO_MIN_MS || (!atualizar && idade < RETRATO_VALE_MS))) return await ultimoAdicional(true);
-  if (calculandoAdicional) return await calculandoAdicional;
-
-  const tentativa = (await rest("adicional_retratos?select=id,calculado_em,status&order=calculado_em.desc&limit=1"))[0];
-  const idadeTentativa = tentativa ? Date.now() - Date.parse(tentativa.calculado_em) : Infinity;
-  if (tentativa?.status === "calculando" && idadeTentativa < TRAVA_MS) {
-    for (let i = 0; i < 40; i++) {
-      await espera(3000);
-      const r = await ultimoAdicional(false);
-      if (r && Date.parse(r.calculado_em) >= Date.parse(tentativa.calculado_em)) return await ultimoAdicional(true);
-      const t = (await rest("adicional_retratos?select=status,calculado_em&order=calculado_em.desc&limit=1"))[0];
-      if (t && t.status === "erro" && Date.parse(t.calculado_em) >= Date.parse(tentativa.calculado_em)) break;
-    }
-    throw new Erro(409, "Outra pessoa está consultando o Omie agora. Tente de novo em 1 minuto.");
-  }
-  if (tentativa?.status === "erro" && idadeTentativa < RETRATO_MIN_MS) {
-    if (ult) return await ultimoAdicional(true);
-    throw new Erro(429, "A última consulta ao Omie falhou há pouco. Tente de novo em 2 minutos.");
-  }
-
-  calculandoAdicional = (async () => {
-    await rest("adicional_retratos", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ calculado_por: usuario.nome, status: "calculando" }) });
-    const prazo = Date.now() + PRAZO_MS;
-    const repetir = async <T>(fn: () => Promise<T>): Promise<T> => {
-      for (let n = 0; ; n++) {
-        if (Date.now() > prazo) throw new Erro(504, "O Omie demorou demais para responder. Tente de novo em alguns minutos.");
-        try { return await fn(); } catch (e) {
-          if (n >= 2 || !(e instanceof Erro) || e.status !== 502) throw e;
-          await espera(1500 * (n + 1));
-        }
-      }
-    };
-    const consultar = (param: Record<string, unknown>) => repetir(() => omie("financas/pesquisartitulos", "PesquisarLancamentos", param));
-    const clientes = async (codigos: number[]) => {
-      const r = await repetir(() => omie("geral/clientes", "ListarClientes", {
-        pagina: 1, registros_por_pagina: 50, apenas_importado_api: "N", clientesPorCodigo: codigos.map((c) => ({ codigo_cliente_omie: c })),
-      }));
-      return r?.clientes_cadastro || [];
-    };
-    try {
-      const dados = await adicionalDoOmie(consultar, clientes);
-      const novo = (await rest("adicional_retratos", {
-        method: "POST",
-        body: JSON.stringify({ calculado_por: usuario.nome, status: dados.status, dados }),
-      }))[0];
-      // Só o retrato mais novo guarda os títulos (cerca de 150 KB): os anteriores ficam só com a data e o status.
-      await rest(`adicional_retratos?id=lt.${Number(novo.id)}&dados=neq.%7B%7D`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ dados: {} }) })
-        .catch((e) => console.error(`adicional: retratos antigos não limpos (${(e as Error).message})`));
-      return novo;
-    } catch (e) {
-      await rest("adicional_retratos", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ calculado_por: usuario.nome, status: "erro" }) }).catch(() => {});
-      throw e;
-    }
-  })().finally(() => { calculandoAdicional = null; });
-  return await calculandoAdicional;
-}
-
-async function adicionalParaTela(usuario: Usuario, atualizar: boolean) {
-  const r = await retratoAdicional(usuario, atualizar);
-  const d = r?.dados || {};
-  const codigos = [...new Set((d.titulos || []).map((t: any) => Number(t.cliente)).filter((c: number) => Number.isSafeInteger(c) && c > 0))];
-  const whatsapp = await rpc("painel_adicional_whatsapp", { p_clientes: codigos, p_desde: CAMPANHA_DESDE });
-  return { calculado_em: r.calculado_em, calculado_por: r.calculado_por, status: r.status, hoje: hojeBrasil(), ...d, whatsapp };
-}
-
 // O que vai para a tela: os totais (sem os atrasados por cliente, que só o Quem cobrar usa).
 function totaisParaTela(r: any) {
   return { dia: r.dia, calculado_em: r.calculado_em, calculado_por: r.calculado_por, status: r.status, financeiro: { ...r.totais, atualizado: r.calculado_em } };
@@ -1087,8 +986,6 @@ Deno.serve(async (req) => {
         const [c, extras] = await Promise.all([conversa, rpc("painel_conversa_extras", { p_contato: contato })]);
         return json({ ...c, ...extras }, 200, h);
       }
-      case "adicional":
-        return json(await adicionalParaTela(usuario, u.searchParams.get("atualizar") === "1"), 200, h);
       case "titulos":
         return json({ omie_ligado: !!(OMIE_KEY && OMIE_SECRET), titulos: OMIE_KEY && OMIE_SECRET ? await titulosDoContato(inteiro(u.searchParams.get("contato"), "Contato")) : [] }, 200, h);
       case "midia":
