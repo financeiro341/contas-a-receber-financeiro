@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { anotarAdicional, lerAdicional } from '../lib/api.js';
 import { brl, dataCurta, inteiro, plural } from '../utils/formato.js';
-import { NOME_PAGAMENTO, P1, P2, PAGAMENTOS, clientesDoAdicional, deFora, diaADia, historicoPagamentos, metaDeHoje, metasDoMes, resumoParcelas } from '../utils/adicional.js';
+import { NOME_SITUACAO } from '../constants.js';
+import { NOME_PAGAMENTO, P1, P2, PAGAMENTOS, clientesDoAdicional, deFora, fraseParcela, diaADia, historicoPagamentos, metaDeHoje, metasDoMes, resumoParcelas } from '../utils/adicional.js';
 import { Estado, Kpi, Vazio, baixarCsv, useDados } from './comum.jsx';
 
 // Aba Adicional Anual (24/11/2026, pedido do Marcus): a cobrança da mensalidade adicional anual de 2026 sem digitação.
@@ -13,6 +14,10 @@ const POR_PAGINA = 30;
 const semAcento = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 const horaDe = (iso) => new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(iso)).replace(',', ' às');
 const pctTexto = (p) => `${Math.floor((p || 0) * 100)}%`;
+// Status da mensagem do boleto do adicional no WhatsApp (o status só avança: enviado, entregue, lido).
+const BOLETO = {
+  READ: 'lido', PLAYED: 'lido', DELIVERY_ACK: 'entregue', SERVER_ACK: 'enviado', PENDING: 'saindo', ERROR: 'não entregue',
+};
 const DIAS_SEMANA = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
 const semana = (iso) => DIAS_SEMANA[new Date(`${iso}T12:00:00Z`).getUTCDay()];
 
@@ -211,6 +216,7 @@ function PorCliente({ lista, abrirNaCaixa, aoAnotar }) {
   const [busca, setBusca] = useState('');
   const [mostrar, setMostrar] = useState(POR_PAGINA);
   const [anotando, setAnotando] = useState(null);
+  const [resumo, setResumo] = useState(null);
 
   const contagem = useMemo(() => {
     const c = { todos: lista.length };
@@ -262,6 +268,7 @@ function PorCliente({ lista, abrirNaCaixa, aoAnotar }) {
         <ul className="lista-cobrar">
           {filtrada.slice(0, mostrar).map((c) => (
             <ItemCobrar key={c.cliente} c={c} abrirNaCaixa={abrirNaCaixa} anotando={anotando === c.cliente}
+              resumoAberto={resumo === c.cliente} aoAlternarResumo={() => setResumo(resumo === c.cliente ? null : c.cliente)}
               aoAbrirNota={() => setAnotando(anotando === c.cliente ? null : c.cliente)}
               aoSalvarNota={(nota) => { aoAnotar(c.cliente, nota); setAnotando(null); }} />
           ))}
@@ -274,7 +281,7 @@ function PorCliente({ lista, abrirNaCaixa, aoAnotar }) {
   );
 }
 
-function ItemCobrar({ c, abrirNaCaixa, anotando, aoAbrirNota, aoSalvarNota }) {
+function ItemCobrar({ c, abrirNaCaixa, anotando, aoAbrirNota, aoSalvarNota, resumoAberto, aoAlternarResumo }) {
   // Só o necessário em cada cliente (pedido do Marcus, 24/11/2026, 11h52): nome, situação de pagamento e valor. A observação
   // do título no Omie (ex.: empresa baixada) e a anotação da equipe aparecem numa linha discreta, só quando existem.
   const ct = c.contato;
@@ -282,7 +289,10 @@ function ItemCobrar({ c, abrirNaCaixa, anotando, aoAbrirNota, aoSalvarNota }) {
   return (
     <li className="ad-item">
       <div className="quem">
-        <span className="nome">{c.nome}</span>
+        <button type="button" className="nome ad-nome" onClick={aoAlternarResumo} aria-expanded={resumoAberto} aria-controls={`resumo-${c.cliente}`}
+          title={resumoAberto ? 'Fechar o resumo' : 'Ver o resumo do cliente'}>
+          {c.nome}<i className={`ti ${resumoAberto ? 'ti-chevron-up' : 'ti-chevron-down'}`} aria-hidden="true" />
+        </button>
         <span className="marcas">
           <span className={`etq etq-pag ${NOME_PAGAMENTO[c.pagamento].cor}`}><span className={`bolinha pg-${c.pagamento}`} aria-hidden="true" />{NOME_PAGAMENTO[c.pagamento].nome}</span>
         </span>
@@ -317,7 +327,36 @@ function ItemCobrar({ c, abrirNaCaixa, anotando, aoAbrirNota, aoSalvarNota }) {
           <i className="ti ti-pencil" aria-hidden="true" /><span className="rotulo-largo">Anotar</span>
         </button>
       </div>
+      {resumoAberto && <ResumoCliente c={c} />}
     </li>
+  );
+}
+
+// Resumo da situação atual do cliente (pedido do Marcus, 24/11/2026, 11h55): abre ao clicar no nome, com o que saiu da
+// linha: cada parcela (paga em tal data, quanto falta, dias de atraso), a última cobrança no WhatsApp, o boleto do adicional
+// pelo PayBot, o retorno marcado, a observação do Omie e a anotação da equipe.
+function ResumoCliente({ c }) {
+  const ct = c.contato;
+  const dmy = (iso) => dataCurta(String(iso).slice(0, 10));
+  const whats = !ct ? 'Nenhum número de WhatsApp ligado a este cliente no cadastro.'
+    : ct.situacao ? `Última cobrança no WhatsApp: ${NOME_SITUACAO[ct.situacao] || ct.situacao} em ${dataCurta(ct.situacao_dia)}.`
+      : 'Sem cobrança pelo WhatsApp desde 05/11.';
+  const linhas = [
+    ...c.detalhe.map((d) => ({ icone: d.estado === 'paga' ? 'ti-circle-check' : d.estado === 'a_vencer' ? 'ti-clock' : 'ti-alert-circle', texto: fraseParcela(d), tom: d.estado })),
+    { icone: 'ti-brand-whatsapp', texto: `${whats}${ct?.nome && ct.nome !== c.nome ? ` Contato: ${ct.nome}${c.contatos_qtd > 1 ? ` e mais ${c.contatos_qtd - 1} ${plural(c.contatos_qtd - 1, 'número', 'números')}` : ''}.` : ''}` },
+    ct?.boleto_em && { icone: 'ti-file-invoice', texto: `Boleto do adicional pelo PayBot: ${BOLETO[ct.boleto_status] || 'enviado'} (${dmy(ct.boleto_em)}${ct.boletos > 1 ? `, ${ct.boletos} envios desde 05/11` : ''}).`, tom: ct.boleto_status === 'ERROR' ? 'vencida' : undefined },
+    ct?.retorno && { icone: 'ti-alarm', texto: `Retorno marcado para ${dataCurta(ct.retorno.dia)}${ct.retorno.hora ? ` às ${ct.retorno.hora}` : ''}.` },
+    ...c.obs.map((o) => ({ icone: 'ti-building-bank', texto: `Observação no Omie: ${o}` })),
+    c.anotacao && { icone: 'ti-note', texto: `Anotação: ${c.anotacao.texto}${c.anotacao.por ? ` (${c.anotacao.por})` : ''}` },
+  ].filter(Boolean);
+  return (
+    <div className="ad-resumo" id={`resumo-${c.cliente}`}>
+      <ul>
+        {linhas.map((l, i) => (
+          <li key={i} className={l.tom ? `tom-${l.tom}` : undefined}><i className={`ti ${l.icone}`} aria-hidden="true" /><span>{l.texto}</span></li>
+        ))}
+      </ul>
+    </div>
   );
 }
 

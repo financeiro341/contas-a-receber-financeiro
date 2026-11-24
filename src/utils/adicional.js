@@ -154,8 +154,14 @@ export function clientesDoAdicional(dados, hoje) {
   for (const t of (dados.titulos || []).filter(valido)) {
     const c = g.get(t.cliente) || { cliente: t.cliente, p: {}, aberto: 0, vencido: 0, quitado: 0, recebido: 0, venc_mais_antigo: null, obs: new Set(), ultimo_pagamento: null };
     // Dois títulos da mesma parcela para o mesmo cliente (raro): soma, e a parcela só fica paga se os dois estiverem pagos.
-    const atual = c.p[t.parcela];
-    c.p[t.parcela] = atual ? { aberto: atual.aberto + t.aberto, quitado: atual.quitado + t.quitado } : { aberto: t.aberto, quitado: t.quitado };
+    const atual = c.p[t.parcela] || { valor: 0, aberto: 0, quitado: 0, recebido: 0, vencimento: t.vencimento, pagamentos: [] };
+    atual.valor += t.valor;
+    atual.aberto += t.aberto;
+    atual.quitado += t.quitado;
+    atual.recebido += t.recebido;
+    if (t.vencimento && (!atual.vencimento || t.vencimento < atual.vencimento)) atual.vencimento = t.vencimento;
+    atual.pagamentos.push(...(t.pagamentos || []));
+    c.p[t.parcela] = atual;
     c.aberto += t.aberto;
     c.quitado += t.quitado;
     c.recebido += t.recebido;
@@ -192,8 +198,33 @@ export function clientesDoAdicional(dados, hoje) {
       contato: principal,
       outros_numeros: Math.max(0, contatos.length - 1),
       anotacao: notas[String(c.cliente)] || null,
+      // Detalhe de cada parcela para o resumo do cliente (pedido do Marcus, 24/11/2026, 11h55).
+      detalhe: [1, 2].filter((n) => c.p[n]).map((n) => {
+        const x = c.p[n];
+        const pags = [...x.pagamentos].filter((pg) => pg.dia).sort((a, b) => a.dia.localeCompare(b.dia));
+        return {
+          parcela: n, valor: r2(x.valor), aberto: r2(x.aberto), quitado: r2(x.quitado), recebido: r2(x.recebido), vencimento: x.vencimento,
+          estado: x.aberto <= 0.004 ? 'paga' : x.quitado > 0.004 ? 'parte' : (x.vencimento && x.vencimento < hoje ? 'vencida' : 'a_vencer'),
+          dias_atraso: x.aberto > 0.004 && x.vencimento && x.vencimento < hoje ? Math.round((Date.parse(hoje) - Date.parse(x.vencimento)) / 864e5) : 0,
+          pagamentos: pags.map((pg) => ({ dia: pg.dia, valor: pg.valor, forma: [pg.forma, pg.banco].filter(Boolean).join(', ') })),
+        };
+      }),
+      contatos_qtd: contatos.length,
     };
   }).sort((a, b) => b.vencido - a.vencido || b.aberto - a.aberto || a.nome.localeCompare(b.nome));
+}
+
+const dm = (iso) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : '');
+const real = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+// Uma frase por parcela, para o resumo do cliente: "1ª parcela (R$ 135,08, venc. 10/11): paga em 12/11." etc.
+export function fraseParcela(d) {
+  const cab = `${d.parcela}ª parcela (${real(d.valor)}, vencimento ${dm(d.vencimento)})`;
+  const ultimo = d.pagamentos.length ? d.pagamentos[d.pagamentos.length - 1].dia : null;
+  if (d.estado === 'paga') return `${cab}: paga${ultimo ? ` em ${dm(ultimo)}` : ''}${d.recebido - d.quitado > 0.004 ? `, ${real(d.recebido)} com juros e multa` : ''}.`;
+  if (d.estado === 'parte') return `${cab}: pagou ${real(d.quitado)}${ultimo ? ` (último pagamento em ${dm(ultimo)})` : ''}, faltam ${real(d.aberto)}${d.dias_atraso ? `, vencida há ${d.dias_atraso} ${d.dias_atraso === 1 ? 'dia' : 'dias'}` : ''}.`;
+  if (d.estado === 'vencida') return `${cab}: não paga, vencida há ${d.dias_atraso} ${d.dias_atraso === 1 ? 'dia' : 'dias'}.`;
+  return `${cab}: ainda não venceu.`;
 }
 
 // Quem ainda deve alguma coisa do adicional.

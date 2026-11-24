@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clientesDoAdicional, clientesEmAberto, deFora, situacaoPagamento, diaADia, diasUteis, historicoPagamentos, metaDeHoje, metasDoMes, resumoParcelas } from './adicional.js';
+import { clientesDoAdicional, clientesEmAberto, deFora, fraseParcela, situacaoPagamento, diaADia, diasUteis, historicoPagamentos, metaDeHoje, metasDoMes, resumoParcelas } from './adicional.js';
 
 const t = (o) => ({ cancelado: false, excluido: false, juros_multa: 0, recebido: 0, quitado: 0, pagamentos: [], obs: null, ...o });
 const titulos = [
@@ -97,6 +97,20 @@ describe('situação de pagamento por cliente', () => {
     // 10: 1ª paga e 2ª aberta; 20: nada; 50: 1ª em parte (2ª não existe). 30 cancelado e 40 excluído ficam fora.
     expect(por).toEqual({ 10: 'primeira', 20: 'nenhuma', 50: 'parte' });
     expect(l.find((c) => c.cliente === 10)).toMatchObject({ quitado: 100, recebido: 102, ultimo_pagamento: '2026-11-12', parcelas: [2] });
+  });
+});
+
+describe('resumo do cliente', () => {
+  it('detalhe de cada parcela e uma frase por parcela', () => {
+    const l = clientesDoAdicional(dados, '2026-11-24');
+    const alfa = l.find((c) => c.cliente === 10);
+    expect(alfa.detalhe.map((d) => [d.parcela, d.estado])).toEqual([[1, 'paga'], [2, 'a_vencer']]);
+    expect(fraseParcela(alfa.detalhe[0])).toBe('1ª parcela (R$\u00a0100,00, vencimento 10/11): paga em 12/11, R$\u00a0102,00 com juros e multa.');
+    expect(fraseParcela(alfa.detalhe[1])).toBe('2ª parcela (R$\u00a0100,00, vencimento 10/12): ainda não venceu.');
+    const beta = l.find((c) => c.cliente === 20);
+    expect(fraseParcela(beta.detalhe[0])).toBe('1ª parcela (R$\u00a0200,00, vencimento 10/11): não paga, vencida há 14 dias.');
+    const gama = l.find((c) => c.cliente === 50);
+    expect(fraseParcela(gama.detalhe[0])).toBe('1ª parcela (R$\u00a0300,00, vencimento 10/11): pagou R$\u00a0150,00 (último pagamento em 21/11), faltam R$\u00a0150,00, vencida há 14 dias.');
   });
 });
 

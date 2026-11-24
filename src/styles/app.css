@@ -1108,5 +1108,15 @@ select.wa-chip { appearance: none; padding-right: 28px; background-image: linear
 .etq-pag { display: inline-flex; align-items: center; gap: 5px; }
 .etq-pag .bolinha { width: 7px; height: 7px; }
 .ad-pago { color: var(--sit-pagou-tx); }
+.ad-nome { border: 0; background: none; padding: 0; font: inherit; font-weight: 600; color: var(--text-primary); text-align: left; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; overflow-wrap: anywhere; }
+.ad-nome .ti { font-size: 15px; color: var(--text-muted); }
+.ad-nome:hover { color: var(--accent-text); }
+.ad-nome:hover .ti { color: var(--accent-text); }
+.ad-resumo { grid-column: 1 / -1; background: var(--bg-subtle); border-radius: 12px; padding: 10px 14px; margin-top: 2px; }
+.ad-resumo ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.lista-cobrar .ad-resumo li { display: flex; border: 0; padding: 0; gap: 8px; align-items: flex-start; font-size: 13.5px; color: var(--text-secondary); line-height: 1.45; }
+.ad-resumo li .ti { font-size: 16px; line-height: 20px; color: var(--text-muted); flex: none; }
+.ad-resumo li.tom-paga .ti { color: var(--sit-pagou-tx); }
+.ad-resumo li.tom-vencida .ti, .ad-resumo li.tom-parte .ti { color: var(--sit-sem-tx); }
 .ad-obs { font-size: 12.5px; color: var(--text-muted); overflow-wrap: anywhere; }
 @media (max-width: 760px) { .ad-leg { grid-template-columns: minmax(0, 1fr); } .ad-dias { overflow-x: auto; grid-auto-columns: 34px; } }
