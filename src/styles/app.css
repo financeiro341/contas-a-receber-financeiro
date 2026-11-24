@@ -1108,4 +1108,5 @@ select.wa-chip { appearance: none; padding-right: 28px; background-image: linear
 .etq-pag { display: inline-flex; align-items: center; gap: 5px; }
 .etq-pag .bolinha { width: 7px; height: 7px; }
 .ad-pago { color: var(--sit-pagou-tx); }
+.ad-obs { font-size: 12.5px; color: var(--text-muted); overflow-wrap: anywhere; }
 @media (max-width: 760px) { .ad-leg { grid-template-columns: minmax(0, 1fr); } .ad-dias { overflow-x: auto; grid-auto-columns: 34px; } }

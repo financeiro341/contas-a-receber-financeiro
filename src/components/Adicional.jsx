@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
 import { anotarAdicional, lerAdicional } from '../lib/api.js';
-import { SITUACOES, NOME_SITUACAO } from '../constants.js';
 import { brl, dataCurta, inteiro, plural } from '../utils/formato.js';
 import { NOME_PAGAMENTO, P1, P2, PAGAMENTOS, clientesDoAdicional, deFora, diaADia, historicoPagamentos, metaDeHoje, metasDoMes, resumoParcelas } from '../utils/adicional.js';
 import { Estado, Kpi, Vazio, baixarCsv, useDados } from './comum.jsx';
@@ -17,15 +16,6 @@ const pctTexto = (p) => `${Math.floor((p || 0) * 100)}%`;
 const DIAS_SEMANA = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
 const semana = (iso) => DIAS_SEMANA[new Date(`${iso}T12:00:00Z`).getUTCDay()];
 
-// Status da mensagem do boleto no WhatsApp (o status só avança: enviado, entregue, lido).
-const BOLETO = {
-  READ: { nome: 'boleto lido', cor: 'cor-verde', icone: 'ti-checks' },
-  PLAYED: { nome: 'boleto lido', cor: 'cor-verde', icone: 'ti-checks' },
-  DELIVERY_ACK: { nome: 'boleto entregue', cor: 'cor-neutro', icone: 'ti-checks' },
-  SERVER_ACK: { nome: 'boleto enviado', cor: 'cor-neutro', icone: 'ti-check' },
-  PENDING: { nome: 'boleto saindo', cor: 'cor-neutro', icone: 'ti-clock' },
-  ERROR: { nome: 'boleto não entregue', cor: 'cor-vermelho', icone: 'ti-alert-triangle' },
-};
 
 
 export default function Adicional({ abrirNaCaixa }) {
@@ -218,7 +208,6 @@ const mil = (v) => (Math.abs(v) >= 1000 ? `${(v / 1000).toLocaleString('pt-BR', 
 
 function PorCliente({ lista, abrirNaCaixa, aoAnotar }) {
   const [filtro, setFiltro] = useState('nenhuma');
-  const [situacao, setSituacao] = useState('');
   const [busca, setBusca] = useState('');
   const [mostrar, setMostrar] = useState(POR_PAGINA);
   const [anotando, setAnotando] = useState(null);
@@ -233,9 +222,8 @@ function PorCliente({ lista, abrirNaCaixa, aoAnotar }) {
   const filtrada = useMemo(() => {
     const q = semAcento(busca);
     return lista.filter((c) => (filtro === 'todos' || c.pagamento === filtro)
-      && (!situacao || (situacao === 'sem_conversa' ? !c.contato?.situacao : c.contato?.situacao === situacao))
       && (!q || semAcento(c.nome).includes(q) || semAcento(c.contato?.nome).includes(q) || semAcento(c.anotacao?.texto).includes(q)));
-  }, [lista, filtro, situacao, busca]);
+  }, [lista, filtro, busca]);
   const somaAberto = filtrada.reduce((s, c) => s + c.aberto, 0);
   const somaRecebido = filtrada.reduce((s, c) => s + c.recebido, 0);
   const escolher = (id) => { setFiltro(id); setMostrar(POR_PAGINA); };
@@ -258,24 +246,18 @@ function PorCliente({ lista, abrirNaCaixa, aoAnotar }) {
         </button>
       </div>
       <div className="quem-cobrar-topo">
-        <select className="faixa-atraso" aria-label="Situação no WhatsApp" value={situacao} onChange={(e) => { setSituacao(e.target.value); setMostrar(POR_PAGINA); }}>
-          <option value="">Qualquer situação no WhatsApp</option>
-          {SITUACOES.map((s) => <option key={s.id} value={s.id}>{s.nome}</option>)}
-          <option value="sem_conversa">Sem cobrança no WhatsApp</option>
-        </select>
         <div className="busca">
           <i className="ti ti-search" aria-hidden="true" />
-          <input type="search" placeholder="Buscar cliente ou anotação" aria-label="Buscar cliente" value={busca} onChange={(e) => { setBusca(e.target.value); setMostrar(POR_PAGINA); }} />
+          <input type="search" placeholder="Buscar cliente" aria-label="Buscar cliente" value={busca} onChange={(e) => { setBusca(e.target.value); setMostrar(POR_PAGINA); }} />
         </div>
       </div>
       <p className="mini quem-cobrar-fonte">
-        {inteiro(filtrada.length)} {plural(filtrada.length, 'cliente', 'clientes')} nesta lista: {brl(somaAberto)} em aberto e {brl(somaRecebido)} já recebidos.
-        {' '}A situação no WhatsApp é a última cobrança desde 05/11 (as mesmas regras da Cobrança do dia).
+        {inteiro(filtrada.length)} {plural(filtrada.length, 'cliente', 'clientes')} nesta lista{[somaAberto > 0.004 && `${brl(somaAberto)} em aberto`, somaRecebido > 0.004 && `${brl(somaRecebido)} já recebidos`].filter(Boolean).map((t, i) => (i ? ` e ${t}` : `: ${t}`)).join('')}.
       </p>
       {filtrada.length === 0 ? (
-        <Vazio icone={filtro === 'nenhuma' && !busca && !situacao ? 'ti-checks' : 'ti-filter-off'}
-          titulo={filtro === 'nenhuma' && !busca && !situacao ? 'Todos os clientes já pagaram alguma parcela' : 'Nenhum cliente aqui'}
-          texto={busca || situacao ? 'Tente outra busca ou situação.' : 'Escolha outro grupo acima.'} />
+        <Vazio icone={filtro === 'nenhuma' && !busca ? 'ti-checks' : 'ti-filter-off'}
+          titulo={filtro === 'nenhuma' && !busca ? 'Todos os clientes já pagaram alguma parcela' : 'Nenhum cliente aqui'}
+          texto={busca ? 'Tente outra busca.' : 'Escolha outro grupo acima.'} />
       ) : (
         <ul className="lista-cobrar">
           {filtrada.slice(0, mostrar).map((c) => (
@@ -293,36 +275,30 @@ function PorCliente({ lista, abrirNaCaixa, aoAnotar }) {
 }
 
 function ItemCobrar({ c, abrirNaCaixa, anotando, aoAbrirNota, aoSalvarNota }) {
+  // Só o necessário em cada cliente (pedido do Marcus, 24/11/2026, 11h52): nome, situação de pagamento e valor. A observação
+  // do título no Omie (ex.: empresa baixada) e a anotação da equipe aparecem numa linha discreta, só quando existem.
   const ct = c.contato;
-  const boleto = ct?.boleto_status ? BOLETO[ct.boleto_status] || { nome: 'boleto enviado', cor: 'cor-neutro', icone: 'ti-check' } : null;
+  const nota = [c.obs.join(' · '), c.anotacao?.texto].filter(Boolean).join(' · ');
   return (
     <li className="ad-item">
       <div className="quem">
         <span className="nome">{c.nome}</span>
-        {ct?.nome && semAcento(ct.nome) !== semAcento(c.nome) && <span className="empresa"><i className="ti ti-brand-whatsapp" aria-hidden="true" /> {ct.nome}{c.outros_numeros > 0 ? ` e mais ${c.outros_numeros} ${plural(c.outros_numeros, 'número', 'números')}` : ''}</span>}
         <span className="marcas">
-          <span className={`etq etq-pag ${NOME_PAGAMENTO[c.pagamento].cor}`}><span className={`bolinha pg-${c.pagamento}`} aria-hidden="true" />{NOME_PAGAMENTO[c.pagamento].nome}{c.ultimo_pagamento && c.pagamento !== 'nenhuma' ? ` em ${dataCurta(c.ultimo_pagamento)}` : ''}</span>
-          {c.vencido > 0 && <span className={`etq ${c.dias_atraso > 15 ? 'cor-vermelho' : 'cor-amarelo'}`}>{c.dias_atraso} {plural(c.dias_atraso, 'dia', 'dias')} de atraso</span>}
-          {ct?.situacao
-            ? <span className={`etiqueta-sit sit-${ct.situacao}`}><span className={`bolinha s-${ct.situacao}`} aria-hidden="true" />{NOME_SITUACAO[ct.situacao] || ct.situacao} em {dataCurta(ct.situacao_dia)}</span>
-            : <span className="etq cor-neutro">{ct ? 'sem cobrança no WhatsApp desde 05/11' : 'sem WhatsApp ligado'}</span>}
-          {boleto && <span className={`etq ${boleto.cor}`} title={`Último boleto do adicional pelo PayBot em ${horaDe(ct.boleto_em)}`}><i className={`ti ${boleto.icone}`} aria-hidden="true" />{boleto.nome} {dataCurta(String(ct.boleto_em).slice(0, 10))}</span>}
-          {ct?.retorno && <span className="etq marca-retorno"><i className="ti ti-alarm" aria-hidden="true" />retorno {dataCurta(ct.retorno.dia)}</span>}
-          {c.obs.map((o) => <span key={o} className="etq cor-amarelo" title="Observação do título no Omie"><i className="ti ti-building-bank" aria-hidden="true" />{o}</span>)}
+          <span className={`etq etq-pag ${NOME_PAGAMENTO[c.pagamento].cor}`}><span className={`bolinha pg-${c.pagamento}`} aria-hidden="true" />{NOME_PAGAMENTO[c.pagamento].nome}</span>
         </span>
-        {c.anotacao && !anotando && <span className="ad-nota"><i className="ti ti-note" aria-hidden="true" /> {c.anotacao.texto}{c.anotacao.por ? <small> ({c.anotacao.por})</small> : null}</span>}
+        {nota && !anotando && <span className="ad-obs">{nota}</span>}
         {anotando && <EditorNota cliente={c.cliente} inicial={c.anotacao?.texto || ''} aoSalvar={aoSalvarNota} aoCancelar={aoAbrirNota} />}
       </div>
       <div className="valor">
         {c.aberto > 0.004 ? (
           <>
             <b>{brl(c.aberto)}</b>
-            <span className="mini">{c.vencido > 0 ? (c.aberto > c.vencido ? `em aberto; ${brl(c.vencido)} vencido` : 'vencido') : 'a vencer'}</span>
+            <span className="mini">{c.vencido > 0 ? `vencido há ${c.dias_atraso} ${plural(c.dias_atraso, 'dia', 'dias')}` : 'a vencer'}</span>
           </>
         ) : (
           <>
             <b className="ad-pago">{brl(c.recebido)}</b>
-            <span className="mini">recebido</span>
+            <span className="mini">{c.ultimo_pagamento ? `pago em ${dataCurta(c.ultimo_pagamento)}` : 'pago'}</span>
           </>
         )}
       </div>
@@ -451,7 +427,6 @@ function Rodape({ d, fora }) {
           <li>Recebido é a coluna "Pago ou Recebido" do Omie, com juros e multa. As metas usam só o valor da parcela quitado, para fechar exato.</li>
           <li>Novembro: receber 100% da 1ª parcela até 30/11. Dezembro: a 2ª parcela e o que sobrou da 1ª até 31/12.</li>
           <li>Meta do dia: o saldo em aberto no começo do dia dividido pelos dias úteis que faltam até o prazo, contando o próprio dia. Se um dia fica abaixo, a meta dos dias seguintes sobe. Fim de semana e feriado (20/11 e 25/12) não contam.</li>
-          <li>Situação no WhatsApp: a última cobrança desde 05/11, pela leitura do relatório nos dias que tiveram e pelas regras do sistema nos outros. Boleto: a última mensagem do PayBot com "Referente a: Adicional Anual".</li>
           {!d.cadastro_completo && <li>O cadastro de clientes do Omie não respondeu nesta consulta: alguns nomes podem aparecer pelo código.</li>}
         </ul>
       </details>
