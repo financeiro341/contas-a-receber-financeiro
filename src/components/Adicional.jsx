@@ -142,7 +142,7 @@ function Parcelas({ parcelas, hoje }) {
   return (
     <>
       <div className="omie-secao"><h2>Parcelas</h2><span>títulos do adicional no Omie, sem os cancelados e os clientes que não recebem o adicional</span></div>
-      <div className="grade g-2">
+      <div className="grade g-2 ad-parcelas">
         {parcelas.map((p) => {
           const vencida = hoje > venc[p.parcela];
           const total = p.quitado + p.aberto;
@@ -186,7 +186,11 @@ function DiaADia({ dias, hoje }) {
   const emDezembro = hoje > P1.prazo;
   const lista = dias.filter((d) => (emDezembro ? d.dia > P1.prazo : d.dia <= P1.prazo));
   if (!lista.length) return null;
-  const max = Math.max(1, ...lista.map((d) => Math.max(d.meta, d.quitado)));
+  // A escala vem dos dias que já passaram (e de hoje): a meta dos dias que faltam pode subir muito no fim do prazo e
+  // achataria as barras; acima da escala, o traço da meta fica no topo.
+  const base = lista.filter((d) => d.momento !== 'futuro');
+  const max = Math.max(1, ...(base.length ? base : lista).map((d) => Math.max(d.meta, d.quitado)));
+  const altura = (v) => `${Math.min(100, (v / max) * 100)}%`;
   const descricao = lista.filter((d) => d.momento !== 'futuro').map((d) => `${dataCurta(d.dia)}: quitado ${brl(d.quitado)}, meta ${brl(d.meta)}`).join('; ');
   return (
     <>
@@ -200,8 +204,8 @@ function DiaADia({ dias, hoje }) {
                 title={`${dataCurta(d.dia)}: meta ${brl(d.meta)}${d.momento !== 'futuro' ? `, quitado ${brl(d.quitado)}` : ''}`}>
                 <em>{d.momento !== 'futuro' && d.quitado > 0 ? mil(d.quitado) : ''}</em>
                 <div className="ad-coluna">
-                  {d.momento !== 'futuro' && <i style={{ height: `${(d.quitado / max) * 100}%` }} />}
-                  <span className="ad-meta" style={{ bottom: `${(d.meta / max) * 100}%` }} aria-hidden="true" />
+                  {d.momento !== 'futuro' && <i style={{ height: altura(d.quitado) }} />}
+                  <span className={`ad-meta${d.meta > max ? ' acima' : ''}`} style={{ bottom: altura(d.meta) }} aria-hidden="true" />
                 </div>
                 <small>{d.momento === 'hoje' ? 'hoje' : d.dia.slice(8, 10)}</small>
               </div>
