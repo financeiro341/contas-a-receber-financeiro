@@ -1093,4 +1093,19 @@ select.wa-chip { appearance: none; padding-right: 28px; background-image: linear
 .ad-como { margin: 10px 2px 0; }
 .ad-como summary { cursor: pointer; }
 .ad-como ul { margin: 6px 0 0; padding-left: 18px; line-height: 1.55; }
+/* Situação de pagamento por cliente (24/11/2026, 11h46). */
+.pg-nenhuma { background: var(--sit-sem); } .pg-parte { background: var(--sit-prometeu); }
+.pg-primeira, .pg-segunda { background: var(--grafico-serie); } .pg-duas, .pg-tudo { background: var(--sit-pagou); }
+.ad-pag-regua { display: flex; gap: 3px; height: 14px; border-radius: 7px; overflow: hidden; background: var(--bg-subtle); }
+.ad-pag-regua i { display: block; height: 100%; flex-basis: 0; }
+.ad-pag-grupos { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin: 12px 0 4px; }
+.ad-pag { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; border: 1px solid var(--border); background: var(--bg-elevated); color: inherit; border-radius: 12px; padding: 10px 12px; cursor: pointer; text-align: left; min-height: 44px; }
+.ad-pag:hover { background: var(--bg-subtle); }
+.ad-pag[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); background: var(--accent-subtle); }
+.ad-pag .rot { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--text-secondary); }
+.ad-pag .bolinha { width: 8px; height: 8px; }
+.ad-pag b { font-size: 22px; font-weight: 700; color: var(--text-primary); letter-spacing: -0.02em; }
+.etq-pag { display: inline-flex; align-items: center; gap: 5px; }
+.etq-pag .bolinha { width: 7px; height: 7px; }
+.ad-pago { color: var(--sit-pagou-tx); }
 @media (max-width: 760px) { .ad-leg { grid-template-columns: minmax(0, 1fr); } .ad-dias { overflow-x: auto; grid-auto-columns: 34px; } }

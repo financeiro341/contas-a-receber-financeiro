@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { anotarAdicional, lerAdicional } from '../lib/api.js';
 import { SITUACOES, NOME_SITUACAO } from '../constants.js';
 import { brl, dataCurta, inteiro, plural } from '../utils/formato.js';
-import { P1, P2, clientesEmAberto, deFora, diaADia, historicoPagamentos, metaDeHoje, metasDoMes, resumoParcelas } from '../utils/adicional.js';
+import { NOME_PAGAMENTO, P1, P2, PAGAMENTOS, clientesDoAdicional, deFora, diaADia, historicoPagamentos, metaDeHoje, metasDoMes, resumoParcelas } from '../utils/adicional.js';
 import { Estado, Kpi, Vazio, baixarCsv, useDados } from './comum.jsx';
 
 // Aba Adicional Anual (24/11/2026, pedido do Marcus): a cobrança da mensalidade adicional anual de 2026 sem digitação.
@@ -27,11 +27,6 @@ const BOLETO = {
   ERROR: { nome: 'boleto não entregue', cor: 'cor-vermelho', icone: 'ti-alert-triangle' },
 };
 
-const FILTROS = [
-  { id: 'vencidos', nome: 'Vencidos', dica: 'Clientes com parcela do adicional vencida e em aberto' },
-  { id: 'avencer', nome: 'A vencer', dica: 'Só com parcela que ainda vai vencer' },
-  { id: 'todos', nome: 'Todos em aberto' },
-];
 
 export default function Adicional({ abrirNaCaixa }) {
   const { dados, erro, carregando, recarregar } = useDados(() => lerAdicional(false), []);
@@ -53,16 +48,18 @@ export default function Adicional({ abrirNaCaixa }) {
     const dias = diaADia(titulos, hoje);
     const comNotas = { ...d, whatsapp: { ...(d.whatsapp || {}), anotacoes: { ...(d.whatsapp?.anotacoes || {}), ...notas } } };
     for (const [k, v] of Object.entries(notas)) if (v === null) delete comNotas.whatsapp.anotacoes[k];
-    return {
+    const out = {
       hoje,
       parcelas: resumoParcelas(titulos),
       meses: metasDoMes(titulos),
       dias,
       metaHoje: metaDeHoje(dias, hoje),
-      lista: clientesEmAberto(comNotas, hoje),
+      clientes: clientesDoAdicional(comNotas, hoje),
       pagamentos: historicoPagamentos(d),
       fora: deFora(d),
     };
+    out.lista = out.clientes.filter((c) => c.aberto > 0.004);
+    return out;
   }, [d, notas]);
 
   return (
@@ -91,12 +88,12 @@ export default function Adicional({ abrirNaCaixa }) {
 
             <div className="omie-secao ad-vistas">
               <div className="periodos" role="tablist" aria-label="Lista">
-                <button type="button" role="tab" aria-selected={vista === 'cobrar'} aria-pressed={vista === 'cobrar'} onClick={() => setVista('cobrar')}>Quem cobrar <span className="n">{inteiro(calc.lista.length)}</span></button>
-                <button type="button" role="tab" aria-selected={vista === 'pagos'} aria-pressed={vista === 'pagos'} onClick={() => setVista('pagos')}>Quem já pagou <span className="n">{inteiro(calc.pagamentos.length)}</span></button>
+                <button type="button" role="tab" aria-selected={vista === 'cobrar'} aria-pressed={vista === 'cobrar'} onClick={() => setVista('cobrar')}>Por cliente <span className="n">{inteiro(calc.clientes.length)}</span></button>
+                <button type="button" role="tab" aria-selected={vista === 'pagos'} aria-pressed={vista === 'pagos'} onClick={() => setVista('pagos')}>Histórico de pagamentos <span className="n">{inteiro(calc.pagamentos.length)}</span></button>
               </div>
             </div>
             {vista === 'cobrar'
-              ? <QuemCobrar lista={calc.lista} abrirNaCaixa={abrirNaCaixa} aoAnotar={(cliente, nota) => setNotas((n) => ({ ...n, [cliente]: nota }))} />
+              ? <PorCliente lista={calc.clientes} abrirNaCaixa={abrirNaCaixa} aoAnotar={(cliente, nota) => setNotas((n) => ({ ...n, [cliente]: nota }))} />
               : <Pagamentos linhas={calc.pagamentos} />}
 
             <Rodape d={d} fora={calc.fora} />
@@ -219,55 +216,66 @@ function DiaADia({ dias, hoje }) {
 }
 const mil = (v) => (Math.abs(v) >= 1000 ? `${(v / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mil` : brl(v).replace(/,00$/, ''));
 
-function QuemCobrar({ lista, abrirNaCaixa, aoAnotar }) {
-  const [filtro, setFiltro] = useState('vencidos');
+function PorCliente({ lista, abrirNaCaixa, aoAnotar }) {
+  const [filtro, setFiltro] = useState('nenhuma');
   const [situacao, setSituacao] = useState('');
   const [busca, setBusca] = useState('');
   const [mostrar, setMostrar] = useState(POR_PAGINA);
   const [anotando, setAnotando] = useState(null);
 
-  const contagem = useMemo(() => ({
-    vencidos: lista.filter((c) => c.vencido > 0).length,
-    avencer: lista.filter((c) => c.vencido <= 0).length,
-    todos: lista.length,
-  }), [lista]);
+  const contagem = useMemo(() => {
+    const c = { todos: lista.length };
+    for (const x of lista) c[x.pagamento] = (c[x.pagamento] || 0) + 1;
+    return c;
+  }, [lista]);
+  // Só aparecem as situações que existem (a 2ª paga sem a 1ª e "pagou tudo" são raras).
+  const grupos = PAGAMENTOS.filter((g) => contagem[g.id] > 0 || ['nenhuma', 'primeira', 'duas'].includes(g.id));
   const filtrada = useMemo(() => {
     const q = semAcento(busca);
-    return lista.filter((c) => (filtro === 'todos' || (filtro === 'vencidos' ? c.vencido > 0 : c.vencido <= 0))
+    return lista.filter((c) => (filtro === 'todos' || c.pagamento === filtro)
       && (!situacao || (situacao === 'sem_conversa' ? !c.contato?.situacao : c.contato?.situacao === situacao))
       && (!q || semAcento(c.nome).includes(q) || semAcento(c.contato?.nome).includes(q) || semAcento(c.anotacao?.texto).includes(q)));
   }, [lista, filtro, situacao, busca]);
-  const somaVencido = filtrada.reduce((s, c) => s + c.vencido, 0);
   const somaAberto = filtrada.reduce((s, c) => s + c.aberto, 0);
+  const somaRecebido = filtrada.reduce((s, c) => s + c.recebido, 0);
+  const escolher = (id) => { setFiltro(id); setMostrar(POR_PAGINA); };
 
   return (
-    <section className="cartao" aria-label="Quem cobrar do adicional">
+    <section className="cartao" aria-label="Situação de pagamento por cliente">
+      <div className="ad-pag-regua" role="img" aria-label={PAGAMENTOS.filter((g) => contagem[g.id]).map((g) => `${contagem[g.id]} ${g.plural.toLowerCase()}`).join(', ')}>
+        {PAGAMENTOS.filter((g) => contagem[g.id]).map((g) => <i key={g.id} className={`pg-${g.id}`} style={{ flexGrow: contagem[g.id] }} />)}
+      </div>
+      <div className="ad-pag-grupos" role="group" aria-label="Situação de pagamento">
+        {grupos.map((g) => (
+          <button key={g.id} type="button" className="ad-pag" aria-pressed={filtro === g.id} onClick={() => escolher(g.id)}>
+            <span className="rot"><span className={`bolinha pg-${g.id}`} aria-hidden="true" />{g.plural}</span>
+            <b>{inteiro(contagem[g.id] || 0)}</b>
+          </button>
+        ))}
+        <button type="button" className="ad-pag" aria-pressed={filtro === 'todos'} onClick={() => escolher('todos')}>
+          <span className="rot">Todos os clientes</span>
+          <b>{inteiro(contagem.todos)}</b>
+        </button>
+      </div>
       <div className="quem-cobrar-topo">
-        <div className="periodos" role="group" aria-label="Mostrar">
-          {FILTROS.map((x) => (
-            <button key={x.id} type="button" aria-pressed={filtro === x.id} title={x.dica} onClick={() => { setFiltro(x.id); setMostrar(POR_PAGINA); }}>
-              {x.nome} <span className="n">{contagem[x.id]}</span>
-            </button>
-          ))}
-        </div>
         <select className="faixa-atraso" aria-label="Situação no WhatsApp" value={situacao} onChange={(e) => { setSituacao(e.target.value); setMostrar(POR_PAGINA); }}>
-          <option value="">Qualquer situação</option>
+          <option value="">Qualquer situação no WhatsApp</option>
           {SITUACOES.map((s) => <option key={s.id} value={s.id}>{s.nome}</option>)}
           <option value="sem_conversa">Sem cobrança no WhatsApp</option>
         </select>
         <div className="busca">
           <i className="ti ti-search" aria-hidden="true" />
-          <input type="search" placeholder="Buscar cliente ou anotação" aria-label="Buscar em Quem cobrar" value={busca} onChange={(e) => { setBusca(e.target.value); setMostrar(POR_PAGINA); }} />
+          <input type="search" placeholder="Buscar cliente ou anotação" aria-label="Buscar cliente" value={busca} onChange={(e) => { setBusca(e.target.value); setMostrar(POR_PAGINA); }} />
         </div>
       </div>
       <p className="mini quem-cobrar-fonte">
-        {inteiro(filtrada.length)} {plural(filtrada.length, 'cliente', 'clientes')} nesta lista: {brl(somaVencido)} vencido e {brl(somaAberto)} em aberto.
-        {' '}A situação é a última cobrança no WhatsApp desde 05/11 (as mesmas regras da Cobrança do dia).
+        {inteiro(filtrada.length)} {plural(filtrada.length, 'cliente', 'clientes')} nesta lista: {brl(somaAberto)} em aberto e {brl(somaRecebido)} já recebidos.
+        {' '}A situação no WhatsApp é a última cobrança desde 05/11 (as mesmas regras da Cobrança do dia).
       </p>
       {filtrada.length === 0 ? (
-        <Vazio icone={filtro === 'vencidos' && !busca && !situacao ? 'ti-checks' : 'ti-filter-off'}
-          titulo={filtro === 'vencidos' && !busca && !situacao ? 'Ninguém com o adicional vencido em aberto' : 'Nenhum cliente aqui'}
-          texto={busca || situacao ? 'Tente outra busca ou situação.' : 'Troque o filtro para ver os outros.'} />
+        <Vazio icone={filtro === 'nenhuma' && !busca && !situacao ? 'ti-checks' : 'ti-filter-off'}
+          titulo={filtro === 'nenhuma' && !busca && !situacao ? 'Todos os clientes já pagaram alguma parcela' : 'Nenhum cliente aqui'}
+          texto={busca || situacao ? 'Tente outra busca ou situação.' : 'Escolha outro grupo acima.'} />
       ) : (
         <ul className="lista-cobrar">
           {filtrada.slice(0, mostrar).map((c) => (
@@ -293,10 +301,8 @@ function ItemCobrar({ c, abrirNaCaixa, anotando, aoAbrirNota, aoSalvarNota }) {
         <span className="nome">{c.nome}</span>
         {ct?.nome && semAcento(ct.nome) !== semAcento(c.nome) && <span className="empresa"><i className="ti ti-brand-whatsapp" aria-hidden="true" /> {ct.nome}{c.outros_numeros > 0 ? ` e mais ${c.outros_numeros} ${plural(c.outros_numeros, 'número', 'números')}` : ''}</span>}
         <span className="marcas">
-          <span className={`etq ${c.vencido > 0 ? (c.dias_atraso > 15 ? 'cor-vermelho' : 'cor-amarelo') : 'cor-neutro'}`}>
-            {c.vencido > 0 ? `${c.dias_atraso} ${plural(c.dias_atraso, 'dia', 'dias')} de atraso` : 'a vencer'}
-          </span>
-          <span className="etq cor-neutro">{c.parcelas.length === 2 ? '1ª e 2ª parcelas' : `${c.parcelas[0]}ª parcela`}</span>
+          <span className={`etq etq-pag ${NOME_PAGAMENTO[c.pagamento].cor}`}><span className={`bolinha pg-${c.pagamento}`} aria-hidden="true" />{NOME_PAGAMENTO[c.pagamento].nome}{c.ultimo_pagamento && c.pagamento !== 'nenhuma' ? ` em ${dataCurta(c.ultimo_pagamento)}` : ''}</span>
+          {c.vencido > 0 && <span className={`etq ${c.dias_atraso > 15 ? 'cor-vermelho' : 'cor-amarelo'}`}>{c.dias_atraso} {plural(c.dias_atraso, 'dia', 'dias')} de atraso</span>}
           {ct?.situacao
             ? <span className={`etiqueta-sit sit-${ct.situacao}`}><span className={`bolinha s-${ct.situacao}`} aria-hidden="true" />{NOME_SITUACAO[ct.situacao] || ct.situacao} em {dataCurta(ct.situacao_dia)}</span>
             : <span className="etq cor-neutro">{ct ? 'sem cobrança no WhatsApp desde 05/11' : 'sem WhatsApp ligado'}</span>}
@@ -308,8 +314,17 @@ function ItemCobrar({ c, abrirNaCaixa, anotando, aoAbrirNota, aoSalvarNota }) {
         {anotando && <EditorNota cliente={c.cliente} inicial={c.anotacao?.texto || ''} aoSalvar={aoSalvarNota} aoCancelar={aoAbrirNota} />}
       </div>
       <div className="valor">
-        <b>{brl(c.vencido > 0 ? c.vencido : c.aberto)}</b>
-        <span className="mini">{c.vencido > 0 ? (c.aberto > c.vencido ? `vencido; ${brl(c.aberto)} ao todo` : 'vencido') : 'a vencer'}</span>
+        {c.aberto > 0.004 ? (
+          <>
+            <b>{brl(c.aberto)}</b>
+            <span className="mini">{c.vencido > 0 ? (c.aberto > c.vencido ? `em aberto; ${brl(c.vencido)} vencido` : 'vencido') : 'a vencer'}</span>
+          </>
+        ) : (
+          <>
+            <b className="ad-pago">{brl(c.recebido)}</b>
+            <span className="mini">recebido</span>
+          </>
+        )}
       </div>
       <div className="acoes">
         {ct && (

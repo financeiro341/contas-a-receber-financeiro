@@ -120,18 +120,50 @@ export function metasDoMes(titulos) {
   return [linha('Novembro', prev[1], p1Nov, P1.prazo), linha('Dezembro', prev[2] + sobra, p2 + p1Dez, P2.prazo)];
 }
 
-// Um cliente do Omie por linha, com o que deve do adicional, o WhatsApp ligado a ele e a anotação manual.
-export function clientesEmAberto(dados, hoje) {
+// Situação de pagamento do cliente nas duas parcelas (pedido do Marcus, 24/11/2026, 11h46: "se não pagou, se pagou só a
+// primeira parcela, ou se pagou as duas"). Parcela paga = nada em aberto; com algo quitado e saldo em aberto = paga em parte.
+// Cliente com uma parcela só (a outra cancelada) que pagou a que tem fica como "Pagou tudo".
+export const PAGAMENTOS = [
+  { id: 'nenhuma', nome: 'Não pagou', plural: 'Não pagaram', cor: 'cor-vermelho' },
+  { id: 'parte', nome: 'Pagou uma parte', plural: 'Pagaram uma parte', cor: 'cor-amarelo' },
+  { id: 'primeira', nome: 'Pagou só a 1ª', plural: 'Pagaram só a 1ª', cor: 'cor-azul' },
+  { id: 'segunda', nome: 'Pagou só a 2ª', plural: 'Pagaram só a 2ª', cor: 'cor-azul' },
+  { id: 'duas', nome: 'Pagou as duas', plural: 'Pagaram as duas', cor: 'cor-verde' },
+  { id: 'tudo', nome: 'Pagou tudo', plural: 'Pagaram tudo', cor: 'cor-verde' },
+];
+export const NOME_PAGAMENTO = Object.fromEntries(PAGAMENTOS.map((x) => [x.id, x]));
+
+const estadoParcela = (t) => (!t ? null : t.aberto <= 0.004 ? 'paga' : t.quitado > 0.004 ? 'parte' : 'aberta');
+export function situacaoPagamento(p1, p2) {
+  const a = estadoParcela(p1), b = estadoParcela(p2);
+  if (a && b) {
+    if (a === 'paga' && b === 'paga') return 'duas';
+    if (a === 'paga' && b === 'aberta') return 'primeira';
+    if (a === 'aberta' && b === 'paga') return 'segunda';
+    if (a === 'aberta' && b === 'aberta') return 'nenhuma';
+    return 'parte';
+  }
+  const x = a || b;
+  return x === 'paga' ? 'tudo' : x === 'parte' ? 'parte' : 'nenhuma';
+}
+
+// Um cliente do Omie por linha (todos os da campanha, inclusive quem já pagou tudo), com a situação de pagamento, o que
+// deve do adicional, o WhatsApp ligado a ele e a anotação manual.
+export function clientesDoAdicional(dados, hoje) {
   const g = new Map();
-  for (const t of (dados.titulos || []).filter((x) => valido(x) && x.aberto > 0.004)) {
-    const c = g.get(t.cliente) || { cliente: t.cliente, aberto: 0, vencido: 0, venc_mais_antigo: null, parcelas: new Set(), obs: new Set(), titulos: 0 };
+  for (const t of (dados.titulos || []).filter(valido)) {
+    const c = g.get(t.cliente) || { cliente: t.cliente, p: {}, aberto: 0, vencido: 0, quitado: 0, recebido: 0, venc_mais_antigo: null, obs: new Set(), ultimo_pagamento: null };
+    // Dois títulos da mesma parcela para o mesmo cliente (raro): soma, e a parcela só fica paga se os dois estiverem pagos.
+    const atual = c.p[t.parcela];
+    c.p[t.parcela] = atual ? { aberto: atual.aberto + t.aberto, quitado: atual.quitado + t.quitado } : { aberto: t.aberto, quitado: t.quitado };
     c.aberto += t.aberto;
-    c.titulos += 1;
-    if (t.vencimento && t.vencimento < hoje) {
+    c.quitado += t.quitado;
+    c.recebido += t.recebido;
+    if (t.aberto > 0.004 && t.vencimento && t.vencimento < hoje) {
       c.vencido += t.aberto;
       if (!c.venc_mais_antigo || t.vencimento < c.venc_mais_antigo) c.venc_mais_antigo = t.vencimento;
     }
-    c.parcelas.add(t.parcela);
+    for (const pg of t.pagamentos || []) if (pg.dia && (!c.ultimo_pagamento || pg.dia > c.ultimo_pagamento)) c.ultimo_pagamento = pg.dia;
     if (t.obs) c.obs.add(t.obs);
     g.set(t.cliente, c);
   }
@@ -143,14 +175,19 @@ export function clientesEmAberto(dados, hoje) {
     // O número com a situação mais recente representa o cliente; os outros ficam como "mais N números".
     const principal = [...contatos].sort((a, b) => String(b.situacao_dia || '').localeCompare(String(a.situacao_dia || '')) || String(b.boleto_em || '').localeCompare(String(a.boleto_em || '')))[0] || null;
     const dias = c.venc_mais_antigo ? Math.round((Date.parse(hoje) - Date.parse(c.venc_mais_antigo)) / 864e5) : 0;
+    const emAberto = [1, 2].filter((n) => c.p[n] && c.p[n].aberto > 0.004);
     return {
       cliente: c.cliente,
       nome: cad[String(c.cliente)]?.nome || (principal?.nome) || `Cliente ${c.cliente}`,
       telefone: cad[String(c.cliente)]?.telefone || null,
+      pagamento: situacaoPagamento(c.p[1], c.p[2]),
       aberto: r2(c.aberto),
       vencido: r2(c.vencido),
+      quitado: r2(c.quitado),
+      recebido: r2(c.recebido),
+      ultimo_pagamento: c.ultimo_pagamento,
       dias_atraso: dias,
-      parcelas: [...c.parcelas].sort(),
+      parcelas: emAberto,
       obs: [...c.obs],
       contato: principal,
       outros_numeros: Math.max(0, contatos.length - 1),
@@ -158,6 +195,9 @@ export function clientesEmAberto(dados, hoje) {
     };
   }).sort((a, b) => b.vencido - a.vencido || b.aberto - a.aberto || a.nome.localeCompare(b.nome));
 }
+
+// Quem ainda deve alguma coisa do adicional.
+export const clientesEmAberto = (dados, hoje) => clientesDoAdicional(dados, hoje).filter((c) => c.aberto > 0.004);
 
 // Histórico do que já foi pago do adicional: um pagamento por linha, do mais novo para o mais antigo.
 export function historicoPagamentos(dados) {

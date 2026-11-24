@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clientesEmAberto, deFora, diaADia, diasUteis, historicoPagamentos, metaDeHoje, metasDoMes, resumoParcelas } from './adicional.js';
+import { clientesDoAdicional, clientesEmAberto, deFora, situacaoPagamento, diaADia, diasUteis, historicoPagamentos, metaDeHoje, metasDoMes, resumoParcelas } from './adicional.js';
 
 const t = (o) => ({ cancelado: false, excluido: false, juros_multa: 0, recebido: 0, quitado: 0, pagamentos: [], obs: null, ...o });
 const titulos = [
@@ -76,6 +76,27 @@ describe('lista de quem cobrar', () => {
     expect(l[0]).toMatchObject({ nome: 'BETA', aberto: 400, vencido: 200, dias_atraso: 14, parcelas: [1, 2], outros_numeros: 1, anotacao: { texto: 'contestou', por: 'Maria Clara' } });
     expect(l[0].contato.contato_id).toBe(7);
     expect(l[2]).toMatchObject({ nome: 'ALFA', vencido: 0, aberto: 100, contato: null });
+  });
+});
+
+describe('situação de pagamento por cliente', () => {
+  const p = (aberto, quitado) => ({ aberto, quitado });
+  it('não pagou, uma parte, só a 1ª, só a 2ª, as duas e tudo', () => {
+    expect(situacaoPagamento(p(100, 0), p(100, 0))).toBe('nenhuma');
+    expect(situacaoPagamento(p(50, 50), p(100, 0))).toBe('parte');
+    expect(situacaoPagamento(p(0, 100), p(50, 50))).toBe('parte');
+    expect(situacaoPagamento(p(0, 100), p(100, 0))).toBe('primeira');
+    expect(situacaoPagamento(p(100, 0), p(0, 100))).toBe('segunda');
+    expect(situacaoPagamento(p(0, 100), p(0, 100))).toBe('duas');
+    expect(situacaoPagamento(p(0, 100), undefined)).toBe('tudo');
+    expect(situacaoPagamento(undefined, p(100, 0))).toBe('nenhuma');
+  });
+  it('lista todos os clientes válidos com a situação, inclusive quem já pagou', () => {
+    const l = clientesDoAdicional(dados, '2026-11-24');
+    const por = Object.fromEntries(l.map((c) => [c.cliente, c.pagamento]));
+    // 10: 1ª paga e 2ª aberta; 20: nada; 50: 1ª em parte (2ª não existe). 30 cancelado e 40 excluído ficam fora.
+    expect(por).toEqual({ 10: 'primeira', 20: 'nenhuma', 50: 'parte' });
+    expect(l.find((c) => c.cliente === 10)).toMatchObject({ quitado: 100, recebido: 102, ultimo_pagamento: '2026-11-12', parcelas: [2] });
   });
 });
 
