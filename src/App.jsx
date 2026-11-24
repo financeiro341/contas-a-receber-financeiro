@@ -10,6 +10,7 @@ import Atendimento from './components/Atendimento.jsx';
 import ExtensaoLigacoes from './components/ExtensaoLigacoes.jsx';
 import Historico, { INICIO_DADOS } from './components/Historico.jsx';
 import Omie from './components/Omie.jsx';
+import Adicional from './components/Adicional.jsx';
 import Conversa from './components/Conversa.jsx';
 import Caixa from './components/Caixa.jsx';
 import Calendario from './components/Calendario.jsx';
@@ -21,6 +22,7 @@ const ABAS = [
   { id: 'atendimento', nome: 'Atendimento', curto: 'Atendimento', icone: 'ti-messages' },
   { id: 'historico', nome: 'Histórico', curto: 'Histórico', icone: 'ti-chart-line' },
   { id: 'omie', nome: 'Omie', curto: 'Omie', icone: 'ti-building-bank' },
+  { id: 'adicional', nome: 'Adicional Anual', curto: 'Adicional', icone: 'ti-calendar-dollar' },
 ];
 
 function diaInicial() {
@@ -126,7 +128,7 @@ export default function App() {
 
   const ehHoje = dia === hoje();
   const abaAtual = ABAS.find((a) => a.id === aba);
-  const usaDia = aba !== 'omie' && aba !== 'conversas';
+  const usaDia = !['omie', 'conversas', 'adicional'].includes(aba);
 
   return (
     <>
@@ -159,6 +161,7 @@ export default function App() {
         {aba === 'atendimento' && eu?.papel === 'admin' && <ExtensaoLigacoes />}
         {aba === 'historico' && <Historico dia={dia} abrirDia={(d) => { setDia(d); setAba('hoje'); }} />}
         {aba === 'omie' && <Omie abrirConversa={abrirConversa} eu={eu} />}
+        {aba === 'adicional' && <Adicional abrirNaCaixa={abrirNaCaixa} />}
       </main>
       {conversa && <Conversa contato={conversa.contato} dia={conversa.dia} aoFechar={fecharConversa} abrirNaCaixa={abrirNaCaixa} />}
     </>

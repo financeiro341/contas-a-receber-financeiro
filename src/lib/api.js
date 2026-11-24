@@ -82,6 +82,8 @@ export const lerOmie = () => ler({ acao: 'omie' });
 // na primeira vez; depois a função reaproveita o cálculo por 10 minutos.
 export const lerOmieAgora = (atualizar = false) => ler({ acao: 'omie_agora', ...(atualizar ? { atualizar: '1' } : {}) });
 export const lerQuemCobrar = (atualizar = false) => ler({ acao: 'quem_cobrar', ...(atualizar ? { atualizar: '1' } : {}) });
+// Adicional Anual (24/11/2026): títulos da campanha no Omie (só consulta, reaproveitados por 10 minutos) com o WhatsApp e as anotações.
+export const lerAdicional = (atualizar = false) => ler({ acao: 'adicional', ...(atualizar ? { atualizar: '1' } : {}) });
 export const buscarNaConversa = (contato, q) => ler({ acao: 'buscar_conversa', contato: String(contato), q });
 
 // Caixa de entrada (fase 2).
@@ -107,6 +109,7 @@ async function postar(corpo) {
   return resposta;
 }
 
+export const anotarAdicional = (cliente, texto) => postar({ acao: 'adicional_anotar', cliente, texto });
 export const enviarTexto = (contato, texto) => postar({ acao: 'enviar_texto', contato, texto });
 
 // Extensão de ligações do Chrome (06/11/2026): só administrador gera o código e desliga.
